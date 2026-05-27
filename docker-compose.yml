@@ -1,0 +1,57 @@
+# =============================================================================
+# Zimbra Backup System - Fase 1: Servicio de Backup
+# =============================================================================
+# Para iniciar: docker compose up -d
+# Para ver logs: docker compose logs -f backup-service
+# CLI: docker compose exec backup-service zbackup --help
+
+services:
+
+  backup-service:
+    build:
+      context: ./backup-service
+      dockerfile: Dockerfile
+    container_name: zimbra-backup-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - BACKUP_CONFIG=/config/backup.conf
+      - TZ=${TZ:-UTC}
+    volumes:
+      # Configuración (archivo backup.conf y claves SSH)
+      - ./config:/config:ro
+      - ./config/ssh:/config/ssh:ro
+      # Datos persistentes: backups, DB, logs, git repo
+      - ./data/backups:/data/backups
+      - ./data/db:/data/db
+      - ./data/logs:/data/logs
+      - ./data/git:/data/git
+      # NOTA: NO montar el maildir de Zimbra. El backup-service se conecta
+      # al servidor Zimbra via SSH/rsync para extraer los mailboxes.
+      # El maildir de Zimbra debe estar en el servidor REMOTO, no en este servidor.
+      #
+      # Para desarrollo/pruebas con maildir local (NO USAR EN PRODUCCIÓN):
+      # - ./dev-maildir:/zimbra/store:ro
+    ports:
+      # API REST interna (solo exponer si necesitás acceso externo)
+      # El web-service accede a esta API en la red interna de Docker
+      - "127.0.0.1:8001:8001"
+    networks:
+      - backup_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/api/v1/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+networks:
+  backup_net:
+    name: zimbra_backup_net
+    driver: bridge

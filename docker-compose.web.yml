@@ -1,0 +1,60 @@
+# =============================================================================
+# Zimbra Backup System - Fase 2: Interfaz Web con Auth LDAP
+# =============================================================================
+# PREREQUISITO: El backup-service debe estar corriendo (docker compose up -d)
+# Para iniciar: docker compose -f docker-compose.yml -f docker-compose.web.yml up -d
+# La interfaz web queda disponible en: http://localhost:${WEB_PORT:-8080}
+
+services:
+
+  web-service:
+    build:
+      context: ./web-service
+      dockerfile: Dockerfile
+    container_name: zimbra-backup-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-UTC}
+      - BACKUP_API_URL=http://backup-service:8001
+      - BACKUP_API_KEY=${BACKUP_API_KEY}
+      - WEB_SECRET_KEY=${WEB_SECRET_KEY:-change_me}
+      - WEB_CONFIG=/config/web.json
+      - LDAP_HOST=${LDAP_HOST}
+      - LDAP_PORT=${LDAP_PORT:-389}
+      - LDAP_USE_TLS=${LDAP_USE_TLS:-false}
+      - LDAP_BIND_DN=${LDAP_BIND_DN}
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
+      - LDAP_BASE_DN=${LDAP_BASE_DN}
+      - LDAP_USER_FILTER=${LDAP_USER_FILTER:-(mail={username})}
+      - LDAP_GROUP_ADMIN=${LDAP_GROUP_ADMIN}
+    volumes:
+      # Configuración del web-service (web.json con SMTP, etc.)
+      - ./config:/config:ro
+      - ./data/db:/data/db:ro
+      - ./data/weblogs:/data/logs
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    networks:
+      - backup_net
+    depends_on:
+      backup-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+networks:
+  # backup_net ya está definida en docker-compose.yml
+  backup_net:
+    name: zimbra_backup_net
+    external: true

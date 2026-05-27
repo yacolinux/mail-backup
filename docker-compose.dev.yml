@@ -1,0 +1,93 @@
+# =============================================================================
+# Zimbra Backup System - Docker Compose (DESARROLLO)
+# =============================================================================
+# Para desarrollo/pruebas CON maildir local y datos de prueba
+# NO USAR EN PRODUCCIÓN
+#
+# Uso:
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml exec backup-service zbackup backup
+#   docker compose -f docker-compose.dev.yml exec backup-service zbackup status
+
+services:
+
+  backup-service:
+    build:
+      context: ./backup-service
+      dockerfile: Dockerfile
+    container_name: zimbra-backup-dev
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    environment:
+      - BACKUP_CONFIG=/config/backup.conf
+      - TZ=UTC
+      - BACKUP_API_KEY=dev_api_key_1234567890abcdef
+    volumes:
+      # Configuración de desarrollo (rw para poder editar desde admin)
+      - ./config/backup.dev.conf:/config/backup.conf:rw
+      - ./config/ssh:/config/ssh:ro
+      # Maildir LOCAL con datos de prueba (SOLO DESARROLLO)
+      - ./dev-maildir:/zimbra/store:rw
+      # Scripts de generación de datos
+      - ./scripts:/scripts:ro
+      # Datos persistentes (bind mounts locales)
+      - ./data/backups:/data/backups
+      - ./data/db:/data/db
+      - ./data/logs:/data/logs
+      - ./data/git:/data/git
+    ports:
+      - "127.0.0.1:8001:8001"
+    networks:
+      - backup_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/api/v1/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  web-service:
+    build:
+      context: ./web-service
+      dockerfile: Dockerfile
+    container_name: zimbra-backup-web-dev
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    environment:
+      - TZ=UTC
+      - BACKUP_API_URL=http://backup-service:8001
+      - BACKUP_API_KEY=dev_api_key_1234567890abcdef
+      - WEB_SECRET_KEY=dev_secret_key_1234567890abcdef
+      - WEB_CONFIG=/config/web.json
+      - DEMO_AUTH=true
+    volumes:
+      - ./config/web.json:/config/web.json:rw
+      - ./data/db:/data/db:ro
+      - ./data/backups:/data/backups:ro
+      - ./data/weblogs:/data/logs
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    networks:
+      - backup_net
+    depends_on:
+      backup-service:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+volumes: {}
+
+networks:
+  backup_net:
+    name: zimbra_backup_net_dev
+    driver: bridge
