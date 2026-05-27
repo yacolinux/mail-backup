@@ -1,5 +1,7 @@
 # Zimbra Backup System
 
+![Zimbra Backup System](screenshots/main.jpeg)
+
 Automated backup system for Zimbra 9 / Postfix mailboxes (Maildir format) with GFS retention, rsync hardlinks, web UI with LDAP authentication, and Docker Compose.
 
 ## Features
