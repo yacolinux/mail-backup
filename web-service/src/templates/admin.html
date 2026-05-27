@@ -1,0 +1,872 @@
+{% extends "base.html" %}
+{% block title %}{{ t('admin_title') }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+    <i class="bi bi-gear-fill fs-4 text-warning"></i>
+    <div>
+        <h5 class="mb-0 fw-bold">{{ t('admin_title') }}</h5>
+        <p class="text-muted small mb-0">{{ t('admin_subtitle') }}</p>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <!-- Acciones rápidas -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-lightning-fill me-1 text-warning"></i> {{ t('admin_quick') }}
+            </div>
+            <div class="card-body d-flex flex-wrap gap-2">
+                <form method="POST" action="{{ url_for('admin_run_backup') }}"
+                      onsubmit="return confirm('¿Está seguro de ejecutar backup ahora?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-cloud-download me-1"></i> {{ t('admin_run_backup') }}
+                    </button>
+                </form>
+                <form method="POST" action="{{ url_for('admin_apply_retention') }}"
+                      onsubmit="return confirm('¿Está seguro de aplicar retención?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-trash3 me-1"></i> {{ t('admin_apply_ret') }}
+                    </button>
+                </form>
+                <button type="button" class="btn btn-outline-secondary"
+                        onclick="openConfigModal()">
+                    <i class="bi bi-sliders me-1"></i> {{ t('admin_config_btn') }}
+                </button>
+            </div>
+        </div>
+
+        {% if status %}
+        <!-- Configuración activa -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-sliders me-1"></i> {{ t('admin_active_cfg') }}
+            </div>
+            <div class="card-body">
+                <div class="row g-2 small">
+                    <div class="col-sm-6">
+                        <div class="text-muted">{{ t('admin_interval') }}</div>
+                        <div class="fw-semibold">{{ t('admin_every_h') | replace('{h}', status.config.backup_interval_hours|string) }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-muted">{{ t('admin_remote') }}</div>
+                        <div class="fw-semibold">
+                            {% if status.config.remote_enabled %}
+                            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>{{ t('admin_enabled') }}</span>
+                            {% else %}
+                            <span class="text-muted"><i class="bi bi-x-circle me-1"></i>{{ t('admin_disabled') }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-muted">{{ t('admin_git') }}</div>
+                        <div class="fw-semibold">
+                            {% if status.config.git_enabled %}
+                            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>{{ t('admin_enabled') }}</span>
+                            {% else %}
+                            <span class="text-muted"><i class="bi bi-x-circle me-1"></i>{{ t('admin_disabled') }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-muted">{{ t('admin_retention') }}</div>
+                        <div class="fw-semibold">
+                            {{ status.config.retention.hourly_keep }}h /
+                            {{ status.config.retention.daily_keep }}d /
+                            {{ status.config.retention.weekly_keep }}w /
+                            {{ status.config.retention.monthly_keep }}m
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-muted">{{ t('admin_storage_row') }}</div>
+                        <div class="fw-semibold">
+                            {{ status.stats.total_size_bytes | format_size }} {{ t('admin_storage_val') | replace('{size}', '') | replace('{n}', status.stats.total_snapshots|string) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Últimos runs -->
+        {% if status.recent_runs %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-clock-history me-1"></i> {{ t('admin_history') }}
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-3">{{ t('admin_history_id') }}</th>
+                            <th>{{ t('admin_history_start') }}</th>
+                            <th>{{ t('admin_history_type') }}</th>
+                            <th>{{ t('admin_history_status') }}</th>
+                            <th class="text-end">{{ t('admin_history_accts') }}</th>
+                            <th class="text-end pe-3">{{ t('admin_history_new') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for run in status.recent_runs %}
+                        <tr>
+                            <td class="ps-3 fw-semibold">#{{ run.id }}</td>
+                            <td class="small text-muted">{{ run.started_at | format_date }}</td>
+                            <td>
+                                <span class="badge {% if run.trigger == 'manual' %}bg-info-subtle text-info{% else %}bg-secondary-subtle text-secondary{% endif %}">
+                                    {{ run.trigger }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge
+                                    {% if run.status == 'success' %}bg-success
+                                    {% elif run.status == 'partial' %}bg-warning text-dark
+                                    {% elif run.status == 'running' %}bg-primary
+                                    {% else %}bg-danger{% endif %}">
+                                    {{ run.status }}
+                                </span>
+                            </td>
+                            <td class="text-end">{{ run.accounts_success }}/{{ run.accounts_total }}</td>
+                            <td class="text-end pe-3">{{ run.emails_new }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Cuentas -->
+        <div class="card mb-3">
+            <div class="card-header d-flex flex-wrap gap-2">
+                <span><i class="bi bi-people me-1"></i> {{ t('sidebar_accounts') }}</span>
+                <span class="badge bg-secondary ms-auto">{{ total_accounts }}</span>
+                <form class="d-flex w-100 mt-1" method="GET" action="{{ url_for('admin_panel') }}">
+                    <input type="search" name="search" class="form-control form-control-sm"
+                           placeholder="{{ t('dash_search_acct') }}" value="{{ search or '' }}">
+                    <button class="btn btn-sm btn-outline-secondary ms-1" type="submit">
+                        <i class="bi bi-search"></i>
+                    </button>
+                    {% if search %}
+                    <a href="{{ url_for('admin_panel') }}" class="btn btn-sm btn-outline-danger ms-1">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                    {% endif %}
+                </form>
+            </div>
+            <div class="list-group list-group-flush" style="max-height:380px; overflow-y:auto;">
+                {% for acc in accounts %}
+                <a href="{{ url_for('email_list', email=acc.email) }}"
+                   class="list-group-item list-group-item-action py-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-person-circle text-muted"></i>
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="small fw-semibold text-truncate">{{ acc.email }}</div>
+                            <div class="text-muted" style="font-size:0.72rem;">
+                                {{ "{:,}".format(acc.total_emails or 0) }} emails
+                                &mdash; {{ acc.last_backup_at | format_date }}
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                {% else %}
+                <div class="list-group-item text-muted small text-center py-3">
+                    {% if search %}
+                    {{ t('dash_no_results') }} "{{ search }}"
+                    {% else %}
+                    {{ t('dash_no_accounts') }}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% if total_pages > 1 %}
+            <div class="card-footer d-flex justify-content-between align-items-center py-2">
+                <span class="text-muted small">Pág. {{ page }}/{{ total_pages }}</span>
+                <div class="btn-group btn-group-sm">
+                    <a href="{{ url_for('admin_panel', page=page-1, search=search or '') }}"
+                       class="btn btn-outline-secondary {{ 'disabled' if page <= 1 }}">&laquo;</a>
+                    <a href="{{ url_for('admin_panel', page=page+1, search=search or '') }}"
+                       class="btn btn-outline-secondary {{ 'disabled' if page >= total_pages }}">&raquo;</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Git log -->
+        {% if git_log %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-git me-1"></i> Historial git
+            </div>
+            <div class="list-group list-group-flush" style="max-height:250px; overflow-y:auto;">
+                {% for commit in git_log %}
+                <div class="list-group-item py-2">
+                    <div class="d-flex align-items-start gap-2">
+                        <code class="small text-primary">{{ commit.short_hash }}</code>
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="small text-truncate">{{ commit.message }}</div>
+                            <div class="text-muted" style="font-size:0.7rem;">
+                                {{ commit.date[:16] }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Config Modal -->
+<div class="modal fade" id="configModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-height:90vh;">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>{{ t('cfg_title') }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="config-body">
+                <div class="text-center py-5" id="config-loading">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p class="text-muted">{{ t('cfg_loading') }}</p>
+                </div>
+                <div id="config-form" style="display:none">
+                    <ul class="nav nav-tabs mb-3 flex-nowrap flex-md-wrap" role="tablist" style="overflow-x:auto">
+                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-general" type="button">{{ t('cfg_tab_general') }}</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-source" type="button">{{ t('cfg_tab_source') }}</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-zimbra_remote" type="button">{{ t('cfg_tab_zimbra') }}</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-remote" type="button">{{ t('cfg_tab_offsite') }}</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-retention" type="button">{{ t('cfg_tab_retention') }}</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-git" type="button">{{ t('cfg_tab_git') }}</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ldap" type="button">{{ t('cfg_tab_ldap') }}</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-localusers" type="button">{{ t('cfg_tab_users') }}</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reset" type="button">{{ t('cfg_tab_reset') }}</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-backupcfg" type="button">{{ t('cfg_tab_backup_cfg') }}</button></li>
+                    </ul>
+                    <div class="tab-content" id="config-tabs"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="d-flex align-items-center gap-2 me-auto">
+                    <small class="text-muted" id="config-status"></small>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">{{ t('cfg_close') }}</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveConfig()">
+                    <i class="bi bi-check-lg me-1"></i> {{ t('cfg_save') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Embedded translations for config modal JS
+var _T = {
+    en: {
+        backup_dir_lbl: "Backup directory", db_path_lbl: "DB path", log_path_lbl: "Log file",
+        log_level_lbl: "Log level", interval_lbl: "Backup interval (h)", timezone_lbl: "Timezone",
+        maildir_base_lbl: "Maildir base", discovery_lbl: "Discovery", zmprov_path_lbl: "zmprov path",
+        exclude_accts_lbl: "Exclude accounts (comma)", include_doms_lbl: "Include domains (comma)",
+        enabled_lbl: "Enabled", active_label: "Active", host_zimbra_lbl: "Zimbra host",
+        ssh_user_lbl: "SSH user", ssh_key_lbl: "SSH key", ssh_port_lbl: "SSH port",
+        host_offsite_lbl: "Offsite host", path_lbl: "Remote path",
+        rsync_opts_lbl: "rsync options", hourly_lbl: "Hourly (h)", daily_lbl: "Daily (d)",
+        weekly_lbl: "Weekly (w)", monthly_lbl: "Monthly (m)",
+        repo_path_lbl: "Repo path", git_remote_lbl: "Git remote (optional)",
+        user_name_lbl: "User name", user_email_lbl: "User email",
+        test_conn_btn: "Test connection", test_bind_btn: "Test LDAP bind",
+        test_filter_btn: "Test filter", testing: "Testing...", search_btn: "Search",
+        test_email_ph: "Test email", add_user_btn: "Add user",
+        admin_protected: "admin@example.com cannot be modified here",
+        delete_user_btn: "Delete", edit_user_btn: "Edit",
+        no_local_users: "No additional local users",
+        ldap_host_lbl: "LDAP Host", ldap_port_lbl: "Port", bind_dn_lbl: "Bind DN",
+        bind_pass_lbl: "Bind Password", base_dn_lbl: "Base DN", user_filter_lbl: "User filter",
+        group_admin_lbl: "Admin group DN",
+        saving: "Saving...", saved: "Configuration saved",
+        zip_password: "ZIP password",
+        deploy_example: "Deploy example content", deploy_desc: "Generates 70 accounts with ~5600 test emails and runs an initial backup.",
+        deploy_warn: "WARNING: erases all existing backup data.",
+        deploy_btn: "Deploy example",
+        factory_reset: "Factory Reset",
+        factory_desc: "Deletes ALL backup data, snapshots, database, and git repo.",
+        factory_warn: "WARNING: this operation is IRREVERSIBLE. The system will be completely clean.",
+        factory_btn: "Factory Reset",
+        export_cfg: "Export configuration",
+        export_desc: "Downloads all system configuration options as a JSON file.",
+        export_warn: "WARNING: passwords and users are exported in plain text.",
+        export_zip_opt: "Save in password-protected ZIP",
+        export_btn: "Export JSON",
+        import_cfg: "Import configuration",
+        import_desc: "Upload a previously exported JSON or ZIP file to restore configuration.",
+        import_warn: "IMPORTANT: restart the service and verify connections after importing.",
+        import_has_pass: "The file is password protected",
+        import_btn: "Import",
+    },
+    es: {
+        backup_dir_lbl: "Directorio backups", db_path_lbl: "Ruta BD", log_path_lbl: "Archivo log",
+        log_level_lbl: "Nivel log", interval_lbl: "Intervalo backup (h)", timezone_lbl: "Timezone",
+        maildir_base_lbl: "Maildir base", discovery_lbl: "Descubrimiento", zmprov_path_lbl: "Ruta zmprov",
+        exclude_accts_lbl: "Excluir cuentas (coma)", include_doms_lbl: "Incluir dominios (coma)",
+        enabled_lbl: "Habilitado", active_label: "Activo", host_zimbra_lbl: "Host Zimbra",
+        ssh_user_lbl: "Usuario SSH", ssh_key_lbl: "Clave SSH", ssh_port_lbl: "Puerto SSH",
+        host_offsite_lbl: "Host offsite", path_lbl: "Ruta remota",
+        rsync_opts_lbl: "Opciones rsync", hourly_lbl: "Horarios (h)", daily_lbl: "Diarios (d)",
+        weekly_lbl: "Semanales (w)", monthly_lbl: "Mensuales (m)",
+        repo_path_lbl: "Repo path", git_remote_lbl: "Git remote (opcional)",
+        user_name_lbl: "User name", user_email_lbl: "User email",
+        test_conn_btn: "Probar conexión", test_bind_btn: "Probar conexión LDAP",
+        test_filter_btn: "Probar filtro", testing: "Probando...", search_btn: "Buscar",
+        test_email_ph: "Email de prueba", add_user_btn: "Agregar usuario",
+        admin_protected: "admin@example.com no se modifica desde aquí",
+        delete_user_btn: "Eliminar", edit_user_btn: "Editar",
+        no_local_users: "Sin usuarios locales adicionales",
+        ldap_host_lbl: "Host LDAP", ldap_port_lbl: "Puerto", bind_dn_lbl: "Bind DN",
+        bind_pass_lbl: "Bind Password", base_dn_lbl: "Base DN", user_filter_lbl: "Filtro de usuario",
+        group_admin_lbl: "Grupo admin DN",
+        saving: "Guardando...", saved: "Configuración guardada",
+        zip_password: "Contraseña del ZIP",
+        deploy_example: "Desplegar contenido de ejemplo", deploy_desc: "Genera 70 cuentas con ~5600 emails de prueba y ejecuta un backup inicial.",
+        deploy_warn: "ADVERTENCIA: borra todos los datos de backup existentes.",
+        deploy_btn: "Desplegar ejemplo",
+        factory_reset: "Factory Reset",
+        factory_desc: "Elimina TODOS los datos de backup, snapshots, base de datos y repositorio git.",
+        factory_warn: "ADVERTENCIA: esta operación es IRREVERSIBLE. El sistema quedará completamente limpio.",
+        factory_btn: "Factory Reset",
+        export_cfg: "Exportar configuración",
+        export_desc: "Descarga todas las opciones de configuración del sistema en un archivo JSON.",
+        export_warn: "ADVERTENCIA: contraseñas y usuarios se exportan en texto plano.",
+        export_zip_opt: "Guardar en ZIP protegido con contraseña",
+        export_btn: "Exportar JSON",
+        import_cfg: "Importar configuración",
+        import_desc: "Carga un archivo JSON o ZIP previamente exportado para restaurar la configuración.",
+        import_warn: "IMPORTANTE: se recomienda reiniciar el servicio y verificar conexiones después de importar.",
+        import_has_pass: "El archivo está protegido con contraseña",
+        import_btn: "Importar",
+    }
+};
+function _t(key) {
+    var lang = document.documentElement.lang || 'en';
+    if (lang !== 'en' && lang !== 'es') lang = 'en';
+    var dict = _T[lang] || _T.en;
+    return dict[key] || key;
+}
+
+function openConfigModal() {
+    const modal = new bootstrap.Modal(document.getElementById('configModal'));
+    modal.show();
+    loadConfig();
+}
+
+async function loadConfig() {
+    const loading = document.getElementById('config-loading');
+    const formDiv = document.getElementById('config-form');
+    const tabsDiv = document.getElementById('config-tabs');
+    loading.style.display = 'block';
+    formDiv.style.display = 'none';
+
+    try {
+        const [respCfg, respAuth] = await Promise.all([
+            fetch('{{ url_for("admin_config_load") }}'),
+            fetch('{{ url_for("admin_config_auth") }}'),
+        ]);
+        const cfg = (await respCfg.json()).data;
+        const auth = (await respAuth.json()).data || {};
+        cfg.ldap = auth.ldap || {};
+        cfg.local_users = auth.local_users || {};
+        _localUsers = { ...cfg.local_users };
+        tabsDiv.innerHTML = buildConfigForms(cfg) + buildAuthForms(cfg);
+        loading.style.display = 'none';
+        formDiv.style.display = 'block';
+    } catch (e) {
+        loading.innerHTML = '<div class="alert alert-danger">Error: ' + e.message + '</div>';
+    }
+}
+
+function buildConfigForms(cfg) {
+    const tabs = {
+        general: [
+            {k:'backup_dir', label:_t('backup_dir_lbl'), placeholder:'/data/backups'},
+            {k:'db_path', label:_t('db_path_lbl'), placeholder:'/data/db/backup.db'},
+            {k:'log_path', label:_t('log_path_lbl'), placeholder:'/data/logs/backup.log'},
+            {k:'log_level', label:_t('log_level_lbl'), type:'select', opts:['DEBUG','INFO','WARNING','ERROR']},
+            {k:'backup_interval_hours', label:_t('interval_lbl'), type:'number', min:1},
+            {k:'timezone', label:_t('timezone_lbl'), placeholder:'UTC'},
+        ],
+        source: [
+            {k:'maildir_base', label:_t('maildir_base_lbl'), placeholder:'/opt/zimbra/store'},
+            {k:'account_discovery', label:_t('discovery_lbl'), type:'select', opts:['zmprov','scan']},
+            {k:'zimbra_bin', label:_t('zmprov_path_lbl'), placeholder:'/opt/zimbra/bin/zmprov'},
+            {k:'exclude_accounts', label:_t('exclude_accts_lbl'), placeholder:'spam@dominio.com'},
+            {k:'include_domains', label:_t('include_doms_lbl'), placeholder:'dominio.com'},
+        ],
+        zimbra_remote: [
+            {k:'enabled', label:_t('enabled_lbl'), type:'checkbox'},
+            {k:'host', label:_t('host_zimbra_lbl'), placeholder:'zimbra.empresa.com'},
+            {k:'user', label:_t('ssh_user_lbl'), placeholder:'zimbrabackup'},
+            {k:'ssh_key', label:_t('ssh_key_lbl'), placeholder:'/config/ssh/id_rsa'},
+            {k:'ssh_port', label:_t('ssh_port_lbl'), type:'number', min:1, max:65535},
+        ],
+        remote: [
+            {k:'enabled', label:_t('enabled_lbl'), type:'checkbox'},
+            {k:'host', label:_t('host_offsite_lbl'), placeholder:'backup-offsite.empresa.com'},
+            {k:'user', label:_t('ssh_user_lbl'), placeholder:'backupuser'},
+            {k:'path', label:_t('path_lbl'), placeholder:'/backups/zimbra'},
+            {k:'ssh_key', label:_t('ssh_key_lbl'), placeholder:'/config/ssh/id_rsa'},
+            {k:'ssh_port', label:_t('ssh_port_lbl'), type:'number', min:1, max:65535},
+            {k:'rsync_options', label:_t('rsync_opts_lbl'), placeholder:'--compress --checksum'},
+        ],
+        retention: [
+            {k:'hourly_keep', label:_t('hourly_lbl'), type:'number', min:0},
+            {k:'daily_keep', label:_t('daily_lbl'), type:'number', min:0},
+            {k:'weekly_keep', label:_t('weekly_lbl'), type:'number', min:0},
+            {k:'monthly_keep', label:_t('monthly_lbl'), type:'number', min:0},
+        ],
+        git: [
+            {k:'enabled', label:_t('enabled_lbl'), type:'checkbox'},
+            {k:'repo_path', label:_t('repo_path_lbl'), placeholder:'/data/git'},
+            {k:'git_remote', label:_t('git_remote_lbl'), placeholder:'git@github.com:org/backup-meta.git'},
+            {k:'user_name', label:_t('user_name_lbl'), placeholder:'Zimbra Backup System'},
+            {k:'user_email', label:_t('user_email_lbl'), placeholder:'backup@localhost'},
+        ],
+    };
+
+    let html = '';
+    for (const [tabId, fields] of Object.entries(tabs)) {
+        const tabCfg = cfg[tabId] || {};
+        html += '<div class="tab-pane' + (tabId === 'general' ? ' active' : '') + '" id="tab-' + tabId + '">';
+        html += '<div class="row g-2">';
+        for (const f of fields) {
+            const val = tabCfg[f.k] !== undefined ? tabCfg[f.k] : '';
+            html += '<div class="col-md-6"><div class="mb-2">';
+            html += '<label class="form-label small fw-semibold mb-1">' + f.label + '</label>';
+            const fid = 'cfg-' + tabId + '-' + f.k;
+            if (f.type === 'checkbox') {
+                html += '<div class="form-check form-switch">';
+                html += '<input class="form-check-input" type="checkbox" id="' + fid + '" data-section="' + tabId + '" data-key="' + f.k + '"' + (val === true || val === 'true' ? ' checked' : '') + '>';
+                html += '<label class="form-check-label small" for="' + fid + '">' + _t('active_label') + '</label></div>';
+            } else if (f.type === 'select') {
+                html += '<select class="form-select form-select-sm" id="' + fid + '" data-section="' + tabId + '" data-key="' + f.k + '">';
+                for (const o of f.opts) {
+                    html += '<option value="' + o + '"' + (String(val) === o ? ' selected' : '') + '>' + o + '</option>';
+                }
+                html += '</select>';
+            } else {
+                const t = f.type || 'text';
+                const mn = f.min !== undefined ? ' min="' + f.min + '"' : '';
+                const mx = f.max !== undefined ? ' max="' + f.max + '"' : '';
+                const ph = f.placeholder ? ' placeholder="' + f.placeholder + '"' : '';
+                html += '<input type="' + t + '" class="form-control form-control-sm" id="' + fid + '" data-section="' + tabId + '" data-key="' + f.k + '" value="' + escapeHtml(String(val)) + '"' + mn + mx + ph + '>';
+            }
+            html += '</div></div>';
+        }
+        if (tabId === 'zimbra_remote' || tabId === 'remote') {
+            html += '<div class="col-12 mt-2"><button type="button" class="btn btn-sm btn-outline-info" onclick="testSSH(\'' + tabId + '\')"><i class="bi bi-plug me-1"></i>' + _t('test_conn_btn') + '</button><span class="ms-2 small" id="ssh-result-' + tabId + '"></span></div>';
+        }
+        html += '</div></div>';
+    }
+    return html;
+}
+
+function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function buildAuthForms(cfg) {
+    const ldap = cfg.ldap || {};
+    let html = '';
+    // LDAP tab
+    html += '<div class="tab-pane" id="tab-ldap"><div class="row g-2">';
+    const ldapFields = [
+        {k:'host', label:_t('ldap_host_lbl'), placeholder:'ldap://zimbra.example.com'},
+        {k:'port', label:_t('ldap_port_lbl'), type:'number', min:1, max:65535},
+        {k:'bind_dn', label:_t('bind_dn_lbl'), placeholder:'uid=backup-reader,ou=people,dc=example,dc=com'},
+        {k:'bind_password', label:_t('bind_pass_lbl'), type:'password', placeholder:'••••••••'},
+        {k:'base_dn', label:_t('base_dn_lbl'), placeholder:'ou=people,dc=example,dc=com'},
+        {k:'user_filter', label:_t('user_filter_lbl'), placeholder:'(mail={username})'},
+        {k:'group_admin_dn', label:_t('group_admin_lbl'), placeholder:'cn=admins,ou=groups,dc=example,dc=com'},
+    ];
+    for (const f of ldapFields) {
+        const val = ldap[f.k] !== undefined ? ldap[f.k] : '';
+        const fid = 'cfg-ldap-' + f.k;
+        html += '<div class="col-md-6"><div class="mb-2">';
+        html += '<label class="form-label small fw-semibold mb-1">' + f.label + '</label>';
+        if (f.type === 'password') {
+            html += '<input type="password" class="form-control form-control-sm" id="' + fid + '" data-section="ldap" data-key="' + f.k + '" value="' + escapeHtml(String(val)) + '">';
+        } else if (f.type === 'number') {
+            html += '<input type="number" class="form-control form-control-sm" id="' + fid + '" data-section="ldap" data-key="' + f.k + '" value="' + escapeHtml(String(val)) + '" min="' + (f.min||1) + '" max="' + (f.max||65535) + '">';
+        } else {
+            html += '<input type="text" class="form-control form-control-sm" id="' + fid + '" data-section="ldap" data-key="' + f.k + '" value="' + escapeHtml(String(val)) + '" placeholder="' + (f.placeholder||'') + '">';
+        }
+        html += '</div></div>';
+    }
+    html += '<div class="col-12 mt-2 d-flex gap-2">';
+    html += '<button type="button" class="btn btn-sm btn-outline-info" onclick="testLDAPBind()"><i class="bi bi-plug me-1"></i>' + _t('test_bind_btn') + '</button>';
+    html += '<button type="button" class="btn btn-sm btn-outline-info" onclick="testLDAPFilter()"><i class="bi bi-search me-1"></i>' + _t('test_filter_btn') + '</button>';
+    html += '<span class="ms-2 small" id="ldap-test-result"></span></div>';
+    html += '<div class="col-12 mt-1 d-flex gap-2 align-items-center" id="ldap-filter-row" style="display:none">';
+    html += '<input type="text" class="form-control form-control-sm" id="ldap-test-email" placeholder="' + _t('test_email_ph') + '" style="width:250px">';
+    html += '<button type="button" class="btn btn-sm btn-secondary" onclick="runLDAPFilter()">' + _t('search_btn') + '</button></div>';
+    html += '</div></div>';
+
+    // Local users tab
+    html += '<div class="tab-pane" id="tab-localusers"><div class="row g-2">';
+    html += '<div class="col-12"><div class="d-flex gap-2 mb-2"><button type="button" class="btn btn-sm btn-outline-success" onclick="showAddUser()"><i class="bi bi-plus-lg me-1"></i>' + _t('add_user_btn') + '</button>';
+    html += '<span class="small text-muted ms-2">' + _t('admin_protected') + '</span></div></div>';
+    html += '<div class="col-12"><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Email</th><th>Nombre</th><th>Admin</th><th style="width:120px"></th></tr></thead><tbody id="local-users-tbody">';
+    const users = cfg.local_users || {};
+    for (const [email, u] of Object.entries(users)) {
+        html += '<tr>';
+        html += '<td class="small fw-semibold">' + escapeHtml(email) + '</td>';
+        html += '<td class="small">' + escapeHtml(u.display_name || '') + '</td>';
+        html += '<td>' + (u.is_admin ? '<span class="badge bg-warning text-dark">Admin</span>' : '<span class="badge bg-secondary">User</span>') + '</td>';
+        html += '<td class="text-nowrap"><button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteLocalUser(\'' + escapeHtml(email) + '\')"><i class="bi bi-trash"></i></button>';
+        html += '<button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="editLocalUser(\'' + escapeHtml(email) + '\')"><i class="bi bi-pencil"></i></button></td>';
+        html += '</tr>';
+    }
+    if (Object.keys(users).length === 0) {
+        html += '<tr><td colspan="4" class="text-muted small text-center py-2">' + _t('no_local_users') + '</td></tr>';
+    }
+    html += '</tbody></table></div></div>';
+
+    // Add/edit user form (hidden by default)
+    html += '<div class="col-12 d-none" id="local-user-form"><div class="card bg-light"><div class="card-body py-2"><div class="row g-2 align-items-end">';
+    html += '<input type="hidden" id="lu-original-email">';
+    html += '<div class="col-md-3"><label class="form-label small mb-1">Email</label><input type="text" class="form-control form-control-sm" id="lu-email" placeholder="user@example.com"></div>';
+    html += '<div class="col-md-2"><label class="form-label small mb-1">Password</label><input type="text" class="form-control form-control-sm" id="lu-password" placeholder="••••"></div>';
+    html += '<div class="col-md-2"><label class="form-label small mb-1">Nombre</label><input type="text" class="form-control form-control-sm" id="lu-name" placeholder="Nombre"></div>';
+    html += '<div class="col-md-2"><div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="lu-admin"><label class="form-check-label small">Admin</label></div></div>';
+    html += '<div class="col-md-3"><button type="button" class="btn btn-sm btn-primary me-1" onclick="saveLocalUser()">Guardar</button>';
+    html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cancelLocalUser()">Cancelar</button></div>';
+    html += '</div></div></div></div>';
+    html += '</div></div>';
+
+    // Reset tab
+    html += '<div class="tab-pane" id="tab-reset"><div class="row g-3">';
+    html += '<div class="col-md-6"><div class="card border-warning"><div class="card-header bg-warning bg-opacity-10 text-warning"><i class="bi bi-box-arrow-in-down me-1"></i>' + _t('deploy_example') + '</div>';
+    html += '<div class="card-body small">';
+    html += '<p>' + _t('deploy_desc') + '</p>';
+    html += '<p class="text-danger mb-2"><strong>' + _t('deploy_warn') + '</strong></p>';
+    html += '<form method="POST" action="{{ url_for("admin_example_reset") }}" onsubmit="return confirm(\'¿Está seguro? Se eliminarán todos los datos de backup actuales y se regenerará contenido de ejemplo.\')">';
+    html += '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">';
+    html += '<button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-play-fill me-1"></i>' + _t('deploy_btn') + '</button></form>';
+    html += '</div></div></div>';
+
+    html += '<div class="col-md-6"><div class="card border-danger"><div class="card-header bg-danger bg-opacity-10 text-danger"><i class="bi bi-trash3-fill me-1"></i>' + _t('factory_reset') + '</div>';
+    html += '<div class="card-body small">';
+    html += '<p>' + _t('factory_desc') + '</p>';
+    html += '<p class="text-danger mb-2"><strong>' + _t('factory_warn') + '</strong></p>';
+    html += '<form method="POST" action="{{ url_for("admin_factory_reset") }}" onsubmit="return confirm(\'¡ATENCIÓN! ¿Está seguro de hacer un factory reset? Se perderán TODOS los datos de backup.\')">';
+    html += '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">';
+    html += '<button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-exclamation-triangle-fill me-1"></i>' + _t('factory_btn') + '</button></form>';
+    html += '</div></div></div>';
+    html += '</div></div>';
+
+    // Backup de Configuracion tab
+    html += '<div class="tab-pane" id="tab-backupcfg"><div class="row g-3">';
+    html += '<div class="col-md-6"><div class="card border-info"><div class="card-header bg-info bg-opacity-10 text-info"><i class="bi bi-download me-1"></i>' + _t('export_cfg') + '</div>';
+    html += '<div class="card-body small">';
+    html += '<p>' + _t('export_desc') + '</p>';
+    html += '<p class="text-warning mb-2"><strong>' + _t('export_warn') + '</strong></p>';
+    html += '<form id="form-export-cfg" method="POST" action="{{ url_for("admin_config_export") }}">';
+    html += '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">';
+    html += '<div class="form-check mb-2">';
+    html += '<input class="form-check-input" type="checkbox" id="export-zip" name="use_zip" onchange="toggleExportPass()">';
+    html += '<label class="form-check-label" for="export-zip">' + _t('export_zip_opt') + '</label>';
+    html += '</div>';
+    html += '<div id="export-pass-div" class="mb-2 d-none">';
+    html += '<input type="password" name="password" class="form-control form-control-sm" placeholder="' + _t('zip_password') + '" id="export-password" style="max-width:300px">';
+    html += '</div>';
+    html += '<button type="submit" class="btn btn-info btn-sm"><i class="bi bi-download me-1"></i>' + _t('export_btn') + '</button>';
+    html += '</form></div></div></div>';
+
+    html += '<div class="col-md-6"><div class="card border-success"><div class="card-header bg-success bg-opacity-10 text-success"><i class="bi bi-upload me-1"></i>' + _t('import_cfg') + '</div>';
+    html += '<div class="card-body small">';
+    html += '<p>' + _t('import_desc') + '</p>';
+    html += '<p class="text-danger mb-2"><strong>' + _t('import_warn') + '</strong></p>';
+    html += '<form method="POST" action="{{ url_for("admin_config_import") }}" enctype="multipart/form-data">';
+    html += '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">';
+    html += '<div class="mb-2"><input type="file" name="file" class="form-control form-control-sm" accept=".json,.zip"></div>';
+    html += '<div id="import-pass-div" class="mb-2 d-none">';
+    html += '<input type="password" name="password" class="form-control form-control-sm" placeholder="' + _t('zip_password') + '" style="max-width:300px">';
+    html += '</div>';
+    html += '<div class="form-check mb-2">';
+    html += '<input class="form-check-input" type="checkbox" id="import-has-pass" onchange="toggleImportPass()">';
+    html += '<label class="form-check-label" for="import-has-pass">' + _t('import_has_pass') + '</label>';
+    html += '</div>';
+    html += '<button type="submit" class="btn btn-success btn-sm"><i class="bi bi-upload me-1"></i>' + _t('import_btn') + '</button>';
+    html += '</form></div></div></div>';
+    html += '</div></div>';
+
+    return html;
+}
+
+function collectConfig() {
+    const data = {};
+    document.querySelectorAll('#config-tabs [data-section]').forEach(el => {
+        const section = el.dataset.section;
+        const key = el.dataset.key;
+        if (!data[section]) data[section] = {};
+        if (el.type === 'checkbox') {
+            data[section][key] = el.checked;
+        } else if (el.type === 'number') {
+            data[section][key] = parseInt(el.value) || 0;
+        } else {
+            data[section][key] = el.value;
+        }
+    });
+    return data;
+}
+
+async function saveConfig() {
+    const status = document.getElementById('config-status');
+    status.className = 'text-info small';
+    status.textContent = _t('saving');
+    try {
+        // Save backup config sections
+        const cfgData = collectConfig();
+        const respCfg = await fetch('{{ url_for("admin_config_save") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(cfgData)
+        });
+        const rCfg = await respCfg.json();
+        if (!rCfg.ok) throw new Error(rCfg.error || 'Error guardando config');
+
+        // Save auth sections
+        const authData = collectAuthConfig();
+        const respAuth = await fetch('{{ url_for("admin_config_auth_save") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(authData)
+        });
+        const rAuth = await respAuth.json();
+        if (!rAuth.ok) throw new Error(rAuth.error || 'Error guardando auth');
+
+        status.className = 'text-success small';
+        status.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + _t('saved');
+        setTimeout(() => { status.textContent = ''; }, 4000);
+    } catch (e) {
+        status.className = 'text-danger small';
+        status.textContent = 'Error: ' + e.message;
+    }
+}
+
+function collectAuthConfig() {
+    const data = {};
+    // LDAP
+    const ldap = {};
+    document.querySelectorAll('#config-tabs [data-section="ldap"]').forEach(el => {
+        ldap[el.dataset.key] = el.type === 'number' ? (parseInt(el.value) || 0) : el.value;
+    });
+    data.ldap = ldap;
+    // Local users - collect from global state
+    data.local_users = _localUsers || {};
+    return data;
+}
+
+let _localUsers = {};
+
+async function testLDAPBind() {
+    const resultEl = document.getElementById('ldap-test-result');
+    resultEl.className = 'ms-2 small text-warning';
+    resultEl.textContent = 'Probando bind...';
+    const body = {
+        host: document.getElementById('cfg-ldap-host').value,
+        port: parseInt(document.getElementById('cfg-ldap-port').value) || 389,
+        bind_dn: document.getElementById('cfg-ldap-bind_dn').value,
+        bind_password: document.getElementById('cfg-ldap-bind_password').value,
+    };
+    try {
+        const resp = await fetch('{{ url_for("admin_test_ldap_bind") }}', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const r = await resp.json();
+        const d = r.data || {};
+        if (d.success) {
+            resultEl.className = 'ms-2 small text-success';
+            resultEl.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + d.message;
+        } else {
+            resultEl.className = 'ms-2 small text-danger';
+            resultEl.textContent = d.message || 'Fallo de conexión';
+        }
+    } catch (e) {
+        resultEl.className = 'ms-2 small text-danger';
+        resultEl.textContent = 'Error: ' + e.message;
+    }
+}
+
+function testLDAPFilter() {
+    const row = document.getElementById('ldap-filter-row');
+    if (row.style.display === 'none' || !row.style.display) {
+        row.style.display = 'flex';
+        document.getElementById('ldap-test-email').focus();
+    } else {
+        row.style.display = 'none';
+    }
+}
+
+async function runLDAPFilter() {
+    const resultEl = document.getElementById('ldap-test-result');
+    const email = document.getElementById('ldap-test-email').value.trim();
+    if (!email) { resultEl.textContent = 'Ingrese un email'; return; }
+    resultEl.className = 'ms-2 small text-warning';
+    resultEl.textContent = _t('testing');
+    const body = {
+        host: document.getElementById('cfg-ldap-host').value,
+        port: parseInt(document.getElementById('cfg-ldap-port').value) || 389,
+        bind_dn: document.getElementById('cfg-ldap-bind_dn').value,
+        bind_password: document.getElementById('cfg-ldap-bind_password').value,
+        base_dn: document.getElementById('cfg-ldap-base_dn').value,
+        user_filter: document.getElementById('cfg-ldap-user_filter').value,
+        test_email: email,
+    };
+    try {
+        const resp = await fetch('{{ url_for("admin_test_ldap_filter") }}', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const r = await resp.json();
+        const d = r.data || {};
+        if (d.success) {
+            resultEl.className = 'ms-2 small text-success';
+            resultEl.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + d.message;
+        } else {
+            resultEl.className = 'ms-2 small text-danger';
+            resultEl.textContent = d.message || 'Sin resultados';
+        }
+    } catch (e) {
+        resultEl.className = 'ms-2 small text-danger';
+        resultEl.textContent = 'Error: ' + e.message;
+    }
+}
+
+function showAddUser() {
+    document.getElementById('local-user-form').classList.remove('d-none');
+    document.getElementById('lu-original-email').value = '';
+    document.getElementById('lu-email').value = '';
+    document.getElementById('lu-password').value = '';
+    document.getElementById('lu-name').value = '';
+    document.getElementById('lu-admin').checked = false;
+    document.getElementById('lu-email').focus();
+}
+
+function editLocalUser(email) {
+    const users = _localUsers || {};
+    const u = users[email];
+    if (!u) return;
+    document.getElementById('local-user-form').classList.remove('d-none');
+    document.getElementById('lu-original-email').value = email;
+    document.getElementById('lu-email').value = email;
+    document.getElementById('lu-password').value = u.password || '';
+    document.getElementById('lu-name').value = u.display_name || '';
+    document.getElementById('lu-admin').checked = u.is_admin || false;
+}
+
+function deleteLocalUser(email) {
+    if (confirm('Eliminar usuario local ' + email + '?')) {
+        delete _localUsers[email];
+        refreshLocalUsersTable();
+    }
+}
+
+function cancelLocalUser() {
+    document.getElementById('local-user-form').classList.add('d-none');
+}
+
+function saveLocalUser() {
+    const origEmail = document.getElementById('lu-original-email').value;
+    const email = document.getElementById('lu-email').value.trim().toLowerCase();
+    const password = document.getElementById('lu-password').value;
+    const name = document.getElementById('lu-name').value.trim();
+    const admin = document.getElementById('lu-admin').checked;
+
+    if (!email) { alert('Ingrese un email'); return; }
+    if (email === 'admin@example.com') { alert('admin@example.com no puede modificarse desde aquí'); return; }
+
+    if (origEmail && origEmail !== email) {
+        delete _localUsers[origEmail];
+    }
+    _localUsers[email] = { password: password || 'user123', display_name: name || email.split('@')[0], is_admin: admin };
+    cancelLocalUser();
+    refreshLocalUsersTable();
+}
+
+function refreshLocalUsersTable() {
+    const tbody = document.getElementById('local-users-tbody');
+    const users = _localUsers;
+    let html = '';
+    for (const [email, u] of Object.entries(users)) {
+        html += '<tr>';
+        html += '<td class="small fw-semibold">' + escapeHtml(email) + '</td>';
+        html += '<td class="small">' + escapeHtml(u.display_name || '') + '</td>';
+        html += '<td>' + (u.is_admin ? '<span class="badge bg-warning text-dark">Admin</span>' : '<span class="badge bg-secondary">User</span>') + '</td>';
+        html += '<td class="text-nowrap"><button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteLocalUser(\'' + escapeHtml(email) + '\')"><i class="bi bi-trash"></i></button>';
+        html += '<button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="editLocalUser(\'' + escapeHtml(email) + '\')"><i class="bi bi-pencil"></i></button></td>';
+        html += '</tr>';
+    }
+    if (Object.keys(users).length === 0) {
+        html = '<tr><td colspan="4" class="text-muted small text-center py-2">Sin usuarios locales adicionales</td></tr>';
+    }
+    tbody.innerHTML = html;
+    window._localUsers = users;
+}
+
+
+
+async function testSSH(section) {
+    const resultEl = document.getElementById('ssh-result-' + section);
+    resultEl.className = 'ms-2 small text-warning';
+    resultEl.textContent = _t('testing');
+    const host = document.getElementById('cfg-' + section + '-host').value;
+    const user = document.getElementById('cfg-' + section + '-user').value;
+    const sshKey = document.getElementById('cfg-' + section + '-ssh_key');
+    const key = sshKey ? sshKey.value : '/config/ssh/id_rsa';
+    const portEl = document.getElementById('cfg-' + section + '-ssh_port');
+    const port = portEl ? parseInt(portEl.value) || 22 : 22;
+
+    try {
+        const resp = await fetch('{{ url_for("admin_config_test_ssh") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({host, user, ssh_key: key, ssh_port: port})
+        });
+        const r = await resp.json();
+        if (r.ok && r.data) {
+            if (r.data.success) {
+                resultEl.className = 'ms-2 small text-success';
+                resultEl.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + r.data.message;
+            } else {
+                resultEl.className = 'ms-2 small text-danger';
+                resultEl.textContent = r.data.message || 'Fallo de conexion';
+            }
+        }
+    } catch (e) {
+        resultEl.className = 'ms-2 small text-danger';
+        resultEl.textContent = 'Error: ' + e.message;
+    }
+}
+function toggleExportPass() {
+    const div = document.getElementById('export-pass-div');
+    const cb = document.getElementById('export-zip');
+    if (div && cb) {
+        if (cb.checked) { div.classList.remove('d-none'); }
+        else { div.classList.add('d-none'); document.getElementById('export-password').value = ''; }
+    }
+}
+function toggleImportPass() {
+    const div = document.getElementById('import-pass-div');
+    const cb = document.getElementById('import-has-pass');
+    if (div && cb) {
+        if (cb.checked) { div.classList.remove('d-none'); }
+        else { div.classList.add('d-none'); }
+    }
+}
+</script>
+{% endblock %}

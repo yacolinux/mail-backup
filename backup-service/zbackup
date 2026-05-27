@@ -1,0 +1,10 @@
+#!/bin/bash
+# =============================================================================
+# zbackup - CLI wrapper para el sistema de backup Zimbra
+# =============================================================================
+# Este script puede usarse:
+#   1. Dentro del contenedor: directamente como /usr/local/bin/zbackup
+#   2. En el host: via docker exec (ver scripts/zbackup-host)
+
+cd /app
+exec python -m src.cli "$@"

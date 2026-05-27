@@ -1,0 +1,24 @@
+{
+  "smtp": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "use_tls": true,
+    "username": "backup-notifications@example.com",
+    "password": "CHANGE_ME",
+    "from_addr": "Zimbra Backup <backup-notifications@example.com>"
+  },
+  "ldap": {
+    "host": "ldap://zimbra.example.com",
+    "port": 389,
+    "use_tls": false,
+    "bind_dn": "",
+    "bind_password": "",
+    "base_dn": "",
+    "user_filter": "(mail={username})",
+    "group_admin_dn": ""
+  },
+  "local_users": {
+    "user1@example.com": { "password": "user123", "display_name": "Usuario 1", "is_admin": false },
+    "user2@example.com": { "password": "user123", "display_name": "Usuario 2", "is_admin": false }
+  }
+}

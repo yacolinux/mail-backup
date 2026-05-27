@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Error {{ code }}{% endblock %}
+{% block content %}
+<div class="text-center py-5">
+    <div class="display-1 text-muted fw-bold mb-2">{{ code }}</div>
+    <h4 class="fw-semibold mb-3">{{ message }}</h4>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+        <i class="bi bi-house me-1"></i> Volver al inicio
+    </a>
+</div>
+{% endblock %}

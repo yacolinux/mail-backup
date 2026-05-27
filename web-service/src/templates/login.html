@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ t('login_title') }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center" style="margin-top: 10vh;">
+    <div class="col-md-5 col-lg-4">
+        <div class="text-center mb-4">
+            <i class="bi bi-shield-lock-fill text-primary" style="font-size:3rem;"></i>
+            <h4 class="fw-bold mt-2">{{ t('login_subtitle') }}</h4>
+            <p class="text-muted small">{{ t('login_title') }}</p>
+        </div>
+        <div class="card">
+            <div class="card-body p-4">
+                {% if error %}
+                <div class="alert alert-danger py-2">{{ error }}</div>
+                {% endif %}
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">{{ t('login_email') }}</label>
+                        <input type="email" name="email" class="form-control" placeholder="user@example.com" required autofocus>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">{{ t('login_password') }}</label>
+                        <input type="password" name="password" class="form-control" placeholder="········" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> {{ t('login_button') }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

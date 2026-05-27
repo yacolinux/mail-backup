@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+{% block title %}Emails - {{ account.email }}{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --folder-sidebar-width: 220px;
+    }
+    .emails-layout {
+        display: flex;
+        gap: 1rem;
+    }
+    .folder-sidebar {
+        width: var(--folder-sidebar-width);
+        min-width: 140px;
+        max-width: 500px;
+        flex-shrink: 0;
+    }
+    .folder-resize-handle {
+        width: 6px;
+        cursor: col-resize;
+        background: transparent;
+        transition: background 0.15s;
+        flex-shrink: 0;
+        margin-left: -4px;
+        margin-right: -2px;
+        z-index: 10;
+    }
+    .folder-resize-handle:hover,
+    .folder-resize-handle.resizing {
+        background: var(--bs-primary, #0d6efd);
+        opacity: 0.5;
+    }
+    .emails-main {
+        flex: 1;
+        min-width: 0;
+    }
+    @media (max-width: 768px) {
+        .emails-layout { flex-direction: column; }
+        .folder-sidebar { width: 100%; max-width: 100%; }
+        .folder-resize-handle { display: none; }
+    }
+    #loading-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.35); z-index: 9999;
+        display: none; align-items: center; justify-content: center;
+    }
+    #loading-overlay.show { display: flex; }
+    .loading-box {
+        background: #fff; border-radius: 12px; padding: 2rem 3rem;
+        text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .loading-box .spinner-border { width: 2.5rem; height: 2.5rem; }
+    .loading-box p { margin-top: 0.75rem; color: #6c757d; font-size: 0.9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Loading overlay -->
+<div id="loading-overlay">
+    <div class="loading-box">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mb-0">Reordenando emails, espere por favor...</p>
+    </div>
+</div>
+<div class="d-flex align-items-center gap-2 mb-3">
+    <a href="{{ url_for('dashboard') }}" class="text-muted text-decoration-none">
+        <i class="bi bi-house"></i>
+    </a>
+    <i class="bi bi-chevron-right text-muted small"></i>
+    <span class="fw-semibold">{{ account.email }}</span>
+    {% if current_folder %}
+    <i class="bi bi-chevron-right text-muted small"></i>
+    <span class="text-muted">{{ current_folder }}</span>
+    {% endif %}
+</div>
+
+<div class="emails-layout">
+    <!-- Sidebar de carpetas -->
+    <div class="folder-sidebar" id="folder-sidebar">
+        <div class="card">
+            <div class="card-header py-2">
+                <i class="bi bi-folder2 me-1"></i> Carpetas
+            </div>
+            <div class="list-group list-group-flush">
+                <a href="{{ url_for('email_list', email=account.email) }}"
+                   class="list-group-item list-group-item-action py-2 {% if not current_folder %}active{% endif %}">
+                    <i class="bi bi-inbox me-2"></i>Todos
+                </a>
+                {% for folder in folders %}
+                <a href="{{ url_for('email_list', email=account.email, folder=folder) }}"
+                   class="list-group-item list-group-item-action py-2 {% if current_folder == folder %}active{% endif %}">
+                    <i class="bi bi-folder me-2"></i>{{ folder }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="folder-resize-handle" id="folder-resize-handle"></div>
+
+    <!-- Listado de emails -->
+    <div class="emails-main">
+        <!-- Barra de búsqueda -->
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <form method="GET" class="row g-2 align-items-end">
+                    {% if current_folder %}
+                    <input type="hidden" name="folder" value="{{ current_folder }}">
+                    {% endif %}
+                    <div class="col-md-4">
+                        <input type="text" name="search" class="form-control form-control-sm"
+                               placeholder="Buscar asunto o remitente..."
+                               value="{{ search or '' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="date" name="date_from" class="form-control form-control-sm"
+                               value="{{ date_from or '' }}" placeholder="Desde">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="date" name="date_to" class="form-control form-control-sm"
+                               value="{{ date_to or '' }}" placeholder="Hasta">
+                    </div>
+                    <div class="col-md-2 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                            <i class="bi bi-search"></i>
+                        </button>
+                        <a href="{{ url_for('email_list', email=account.email) }}"
+                           class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-x"></i>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Barra de acciones (aparece al seleccionar emails) -->
+        <div id="action-bar" class="card mb-3 border-primary d-none">
+            <div class="card-body py-2 d-flex align-items-center gap-2 flex-wrap">
+                <span id="selected-count" class="text-primary fw-semibold small"></span>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-file-zip me-1"></i> Descargar ZIP
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="downloadZip('md')"><i class="bi bi-file-text me-2"></i>Markdown (.md)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="downloadZip('pdf')"><i class="bi bi-file-pdf me-2"></i>PDF (.pdf)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="downloadZip('docx')"><i class="bi bi-file-word me-2"></i>Word (.docx)</a></li>
+                    </ul>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#sendModal"
+                        onclick="prepareSendModal()">
+                    <i class="bi bi-send me-1"></i> Enviar por Correo
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm ms-auto"
+                        onclick="clearSelection()">
+                    <i class="bi bi-x me-1"></i> Deseleccionar
+                </button>
+            </div>
+        </div>
+
+        <!-- Tabla de emails -->
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+                <span>
+                    <i class="bi bi-envelope me-1"></i>
+                    {{ total | default(0) }} email(s)
+                    {% if search %} para "{{ search }}"{% endif %}
+                    {% if current_folder %} en {{ current_folder }}{% endif %}
+                </span>
+                <div class="d-flex align-items-center gap-2">
+                    {% if page > 1 %}
+                    <a href="{{ url_for('email_list', email=account.email, page=page-1, folder=current_folder, search=search, date_from=date_from, date_to=date_to, sort=sort_by, order=sort_order) }}"
+                       class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                    {% endif %}
+                    {% if total_pages > 0 %}
+                    <span class="small text-muted">Pág. {{ page }}/{{ total_pages }}</span>
+                    {% endif %}
+                    {% if page < total_pages %}
+                    <a href="{{ url_for('email_list', email=account.email, page=page+1, folder=current_folder, search=search, date_from=date_from, date_to=date_to, sort=sort_by, order=sort_order) }}"
+                       class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if emails %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-3" style="width:36px">
+                                <input type="checkbox" id="select-all" class="form-check-input"
+                                       title="Seleccionar todos los visibles"
+                                       onchange="toggleAll(this)">
+                            </th>
+                            {% macro sort_link(label, column, width) %}
+                            <th class="sort-header" style="width:{{ width }}" onclick="sortBy('{{ column }}')">
+                                {{ label }}
+                                <span class="sort-indicator {{ 'active' if sort_by == column }}">
+                                    {% if sort_by == column and sort_order == 'ASC' %}▲{% elif sort_by == column %}▼{% else %}▼{% endif %}
+                                </span>
+                            </th>
+                            {% endmacro %}
+                            {{ sort_link('Fecha', 'date', '175px') }}
+                            {{ sort_link('De', 'from_addr', '220px') }}
+                            <th class="sort-header" onclick="sortBy('subject')">
+                                Asunto
+                                <span class="sort-indicator {{ 'active' if sort_by == 'subject' }}">{% if sort_by == 'subject' and sort_order == 'ASC' %}▲{% elif sort_by == 'subject' %}▼{% else %}▼{% endif %}</span>
+                            </th>
+                            {{ sort_link('Carpeta', 'folder', '100px') }}
+                            {{ sort_link('Tamaño', 'size_bytes', '80px') }}
+                            <th style="width:40px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for email in emails %}
+                        <tr class="email-row {% if email.deleted %}table-danger{% endif %}"
+                            onclick="location.href='{{ url_for('email_detail', email_id=email.id) }}'">
+                            <td class="ps-3" onclick="event.stopPropagation()">
+                                {% if not email.deleted %}
+                                <input type="checkbox" class="form-check-input email-check"
+                                       value="{{ email.id }}"
+                                       onchange="toggleEmail(this)">
+                                {% endif %}
+                            </td>
+                            <td class="small text-muted">
+                                {{ email.date | format_date }}
+                            </td>
+                            <td class="small text-truncate" style="max-width:220px"
+                                title="{{ email.from_addr }}">
+                                {{ email.from_addr or '-' }}
+                            </td>
+                            <td>
+                                <span class="{% if not email.deleted %}fw-semibold{% else %}text-decoration-line-through text-muted{% endif %}"
+                                      title="{{ email.subject }}">
+                                    {{ email.subject or '(sin asunto)' }}
+                                </span>
+                                {% if 'S' not in (email.maildir_flags or '') %}
+                                <span class="badge bg-primary-subtle text-primary ms-1 small">Nuevo</span>
+                                {% endif %}
+                            </td>
+                            <td class="small">
+                                <span class="badge bg-light text-dark border">
+                                    {{ email.folder or 'INBOX' }}
+                                </span>
+                            </td>
+                            <td class="text-end small text-muted">
+                                {{ email.size_bytes | format_size }}
+                            </td>
+                            <td class="text-center">
+                                {% if email.deleted %}
+                                <i class="bi bi-trash-fill text-danger" title="Eliminado"></i>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación inferior -->
+            {% if total_pages > 1 %}
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <span class="text-muted small">
+                    P&aacute;g. {{ page }} de {{ total_pages }} &mdash; {{ total }} emails
+                </span>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item {{ 'disabled' if page <= 1 }}">
+                            <a class="page-link" href="{{ url_for('email_list', email=account.email, page=page-1, folder=current_folder, search=search, date_from=date_from, date_to=date_to, sort=sort_by, order=sort_order) }}">
+                                &laquo;
+                            </a>
+                        </li>
+                        {% for p in range(total_pages) %}
+                        {% set pn = p + 1 %}
+                        {% if pn == 1 or pn == total_pages or (pn >= page - 2 and pn <= page + 2) %}
+                        <li class="page-item {{ 'active' if pn == page }}">
+                            <a class="page-link" href="{{ url_for('email_list', email=account.email, page=pn, folder=current_folder, search=search, date_from=date_from, date_to=date_to, sort=sort_by, order=sort_order) }}">
+                                {{ pn }}
+                            </a>
+                        </li>
+                        {% elif pn == page - 3 or pn == page + 3 %}
+                        <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                        {% endif %}
+                        {% endfor %}
+                        <li class="page-item {{ 'disabled' if page >= total_pages }}">
+                            <a class="page-link" href="{{ url_for('email_list', email=account.email, page=page+1, folder=current_folder, search=search, date_from=date_from, date_to=date_to, sort=sort_by, order=sort_order) }}">
+                                &raquo;
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-search fs-1 d-block mb-2"></i>
+                No se encontraron emails
+                {% if search %} para "{{ search }}"{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal: enviar por email -->
+<div class="modal fade" id="sendModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-send me-2"></i>Enviar por Correo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="form-send-email" method="POST"
+                  action="{{ url_for('emails_send', email=account.email) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="format" id="send-format" value="md">
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">
+                        Los emails seleccionados se convertirán y enviarán comprimidos en un ZIP adjunto.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Formato de exportación</label>
+                        <div class="btn-group btn-group-sm w-100">
+                            <input type="radio" class="btn-check" name="send_fmt" id="send-fmt-md" value="md" checked>
+                            <label class="btn btn-outline-secondary" for="send-fmt-md" onclick="setSendFormat('md')"><i class="bi bi-file-text me-1"></i>MD</label>
+                            <input type="radio" class="btn-check" name="send_fmt" id="send-fmt-pdf" value="pdf">
+                            <label class="btn btn-outline-secondary" for="send-fmt-pdf" onclick="setSendFormat('pdf')"><i class="bi bi-file-pdf me-1"></i>PDF</label>
+                            <input type="radio" class="btn-check" name="send_fmt" id="send-fmt-docx" value="docx">
+                            <label class="btn btn-outline-secondary" for="send-fmt-docx" onclick="setSendFormat('docx')"><i class="bi bi-file-word me-1"></i>DOCX</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="to_type"
+                                   id="to-mine" value="mine" checked
+                                   onchange="toggleCustomEmail(this)">
+                            <label class="form-check-label" for="to-mine">
+                                Enviar a mi email
+                                <span class="text-muted">({{ user.email }})</span>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="to_type"
+                                   id="to-custom" value="custom"
+                                   onchange="toggleCustomEmail(this)">
+                            <label class="form-check-label" for="to-custom">
+                                Enviar a otro email
+                            </label>
+                        </div>
+                        <div id="custom-email-div" class="mt-2 ms-4 d-none">
+                            <input type="email" name="to_addr" id="to-addr-input"
+                                   class="form-control form-control-sm"
+                                   placeholder="destinatario@ejemplo.com">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary btn-sm"
+                            onclick="submitSend()">
+                        <i class="bi bi-send me-1"></i> Enviar ZIP
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Formulario oculto para descargar ZIP -->
+<form id="form-download-zip" method="POST"
+      action="{{ url_for('emails_download_zip', email=account.email) }}"
+      style="display:none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="format" id="download-format" value="md">
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ================================================================
+// Folder sidebar resize
+// ================================================================
+(function() {
+    const sidebar = document.getElementById('folder-sidebar');
+    const handle  = document.getElementById('folder-resize-handle');
+    if (!sidebar || !handle) return;
+
+    const STORAGE_KEY = 'zimbra_folder_sidebar_width';
+    const MIN_WIDTH   = 140;
+    const MAX_WIDTH   = 500;
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        const w = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, parseInt(saved) || 220));
+        document.documentElement.style.setProperty('--folder-sidebar-width', w + 'px');
+    }
+
+    let dragging = false;
+    let startX   = 0;
+    let startW   = 0;
+
+    handle.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        dragging = true;
+        startX   = e.clientX;
+        startW   = sidebar.offsetWidth;
+        handle.classList.add('resizing');
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        let newW = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startW + dx));
+        document.documentElement.style.setProperty('--folder-sidebar-width', newW + 'px');
+    });
+
+    document.addEventListener('mouseup', function() {
+        if (!dragging) return;
+        dragging = false;
+        handle.classList.remove('resizing');
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        localStorage.setItem(STORAGE_KEY, sidebar.offsetWidth);
+    });
+})();
+
+const selectedIds = new Set();
+
+// Sorting with loading overlay
+function sortBy(column) {
+    const overlay = document.getElementById('loading-overlay');
+    overlay.classList.add('show');
+    const url = new URL(window.location.href);
+    url.searchParams.set('sort', column);
+    const currentSort = url.searchParams.get('sort');
+    const currentOrder = url.searchParams.get('order');
+    url.searchParams.set('order', (currentSort === column && currentOrder === 'ASC') ? 'DESC' : 'ASC');
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+}
+
+function toggleAll(checkbox) {
+    document.querySelectorAll('.email-check').forEach(cb => {
+        cb.checked = checkbox.checked;
+        checkbox.checked ? selectedIds.add(cb.value) : selectedIds.delete(cb.value);
+    });
+    updateActionBar();
+}
+
+function toggleEmail(checkbox) {
+    checkbox.checked ? selectedIds.add(checkbox.value) : selectedIds.delete(checkbox.value);
+    // Si se deselecciona uno, quitar el check de "todos"
+    if (!checkbox.checked) {
+        document.getElementById('select-all').checked = false;
+    }
+    updateActionBar();
+}
+
+function clearSelection() {
+    selectedIds.clear();
+    document.querySelectorAll('.email-check').forEach(cb => cb.checked = false);
+    document.getElementById('select-all').checked = false;
+    updateActionBar();
+}
+
+function updateActionBar() {
+    const count = selectedIds.size;
+    const bar = document.getElementById('action-bar');
+    const counter = document.getElementById('selected-count');
+    if (count > 0) {
+        bar.classList.remove('d-none');
+        counter.textContent = count + ' email(s) seleccionado(s)';
+    } else {
+        bar.classList.add('d-none');
+    }
+}
+
+function populateIds(formId) {
+    const form = document.getElementById(formId);
+    form.querySelectorAll('input[name="email_ids"]').forEach(el => el.remove());
+    selectedIds.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'email_ids';
+        input.value = id;
+        form.appendChild(input);
+    });
+}
+
+function downloadZip(fmt) {
+    if (selectedIds.size === 0) return;
+    document.getElementById('download-format').value = fmt || 'md';
+    populateIds('form-download-zip');
+    document.getElementById('form-download-zip').submit();
+}
+
+function setSendFormat(fmt) {
+    document.getElementById('send-format').value = fmt;
+}
+
+function prepareSendModal() {
+    document.getElementById('to-mine').checked = true;
+    document.getElementById('custom-email-div').classList.add('d-none');
+    document.getElementById('to-addr-input').value = '';
+    document.getElementById('send-format').value = 'md';
+    document.getElementById('send-fmt-md').checked = true;
+}
+
+function toggleCustomEmail(radio) {
+    const customDiv = document.getElementById('custom-email-div');
+    if (radio.value === 'custom') {
+        customDiv.classList.remove('d-none');
+        document.getElementById('to-addr-input').focus();
+    } else {
+        customDiv.classList.add('d-none');
+    }
+}
+
+function submitSend() {
+    if (selectedIds.size === 0) return;
+    const toType = document.querySelector('input[name="to_type"]:checked').value;
+    if (toType === 'custom') {
+        const addr = document.getElementById('to-addr-input').value.trim();
+        if (!addr || !addr.includes('@')) {
+            document.getElementById('to-addr-input').classList.add('is-invalid');
+            return;
+        }
+        document.getElementById('to-addr-input').classList.remove('is-invalid');
+    }
+    populateIds('form-send-email');
+    document.getElementById('form-send-email').submit();
+}
+</script>
+{% endblock %}

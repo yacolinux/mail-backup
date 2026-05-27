@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+    <i class="bi bi-speedometer2 fs-4 text-primary"></i>
+    <div>
+        <h5 class="mb-0 fw-bold">Dashboard</h5>
+        <p class="text-muted small mb-0">
+            Bienvenido, {{ user.display_name }}
+            {% if user.is_admin %} &mdash; Vista de administrador{% endif %}
+        </p>
+    </div>
+</div>
+
+{% if status %}
+<!-- Stats cards (admin) -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#e8f0fe;">
+                <i class="bi bi-people-fill text-primary"></i>
+            </div>
+            <div>
+                <div class="stat-value">{{ status.stats.total_accounts }}</div>
+                <div class="stat-label">Cuentas backupeadas</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#d1e7dd;">
+                <i class="bi bi-envelope-check-fill text-success"></i>
+            </div>
+            <div>
+                <div class="stat-value">{{ "{:,}".format(status.stats.total_emails) }}</div>
+                <div class="stat-label">Emails indexados</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#fff3cd;">
+                <i class="bi bi-camera-fill text-warning"></i>
+            </div>
+            <div>
+                <div class="stat-value">{{ status.stats.total_snapshots }}</div>
+                <div class="stat-label">Snapshots totales</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#f8d7da;">
+                <i class="bi bi-hdd-fill text-danger"></i>
+            </div>
+            <div>
+                <div class="stat-value">{{ status.stats.total_size_bytes | format_size }}</div>
+                <div class="stat-label">Espacio utilizado</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Último backup status -->
+{% if status.stats.last_run %}
+{% set lr = status.stats.last_run %}
+<div class="card mb-4">
+    <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-clock-history"></i> Último backup
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <div class="small text-muted">Estado</div>
+                <span class="badge fs-6
+                    {% if lr.status == 'success' %}bg-success
+                    {% elif lr.status == 'partial' %}bg-warning text-dark
+                    {% else %}bg-danger{% endif %}">
+                    <i class="bi bi-{% if lr.status == 'success' %}check-circle{% elif lr.status == 'partial' %}exclamation-triangle{% else %}x-circle{% endif %} me-1"></i>
+                    {{ lr.status | upper }}
+                </span>
+            </div>
+            <div class="col-md-3">
+                <div class="small text-muted">Inicio</div>
+                <div class="fw-semibold">{{ lr.started_at | format_date }}</div>
+            </div>
+            <div class="col-md-3">
+                <div class="small text-muted">Cuentas procesadas</div>
+                <div class="fw-semibold">{{ lr.accounts_success }}/{{ lr.accounts_total }}</div>
+            </div>
+            <div class="col-md-3">
+                <div class="small text-muted">Emails nuevos</div>
+                <div class="fw-semibold">{{ lr.emails_new }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Tabla de cuentas -->
+<div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span><i class="bi bi-envelope-fill me-2"></i>
+        {% if user.is_admin %}Todas las cuentas{% else %}Mi cuenta{% endif %}
+        </span>
+        {% if user.is_admin %}
+        <div class="d-flex align-items-center gap-2">
+            <form class="d-flex" method="GET" action="{{ url_for('dashboard') }}">
+                <input type="search" name="search" class="form-control form-control-sm" style="width:220px;"
+                       placeholder="Buscar cuenta..." value="{{ search or '' }}">
+                <button class="btn btn-sm btn-outline-secondary ms-1" type="submit">
+                    <i class="bi bi-search"></i>
+                </button>
+                {% if search %}
+                <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-danger ms-1">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+                {% endif %}
+            </form>
+            <span class="badge bg-secondary">{{ total_accounts }} cuentas</span>
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        {% if accounts %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                {% macro acc_sort_link(label, column, width, extra_class) %}
+                <th class="sort-header {{ extra_class or '' }}" style="{{ ('width:' + width) if width else '' }}" onclick="accSortBy('{{ column }}')">
+                    {{ label }}
+                    <span class="sort-indicator {{ 'active' if sort_by == column }}">
+                        {% if sort_by == column and sort_order == 'ASC' %}▲{% elif sort_by == column %}▼{% else %}▼{% endif %}
+                    </span>
+                </th>
+                {% endmacro %}
+                <thead>
+                    <tr>
+                        {{ acc_sort_link('Cuenta de correo', 'email', 'auto', 'ps-3') }}
+                        {{ acc_sort_link('Dominio', 'domain', 'auto', '') }}
+                        {{ acc_sort_link('Emails', 'total_emails', 'auto', 'text-end') }}
+                        {{ acc_sort_link('Último backup', 'last_backup_at', 'auto', '') }}
+                        {{ acc_sort_link('Estado', 'active', 'auto', '') }}
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for acc in accounts %}
+                    <tr class="email-row" onclick="location.href='{{ url_for('email_list', email=acc.email) }}'">
+                        <td class="ps-3 fw-semibold">
+                            <i class="bi bi-person-circle text-muted me-2"></i>{{ acc.email }}
+                        </td>
+                        <td class="text-muted">{{ acc.domain }}</td>
+                        <td class="text-end">{{ "{:,}".format(acc.total_emails or 0) }}</td>
+                        <td class="text-muted small">{{ acc.last_backup_at | format_date }}</td>
+                        <td>
+                            <span class="badge {% if acc.active %}bg-success-subtle text-success{% else %}bg-secondary{% endif %}">
+                                {{ 'activa' if acc.active else 'inactiva' }}
+                            </span>
+                        </td>
+                        <td class="text-end pe-3">
+                            <a href="{{ url_for('email_list', email=acc.email) }}"
+                               class="btn btn-sm btn-outline-primary"
+                               onclick="event.stopPropagation()">
+                                <i class="bi bi-list-ul me-1"></i>Ver emails
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_pages > 1 %}
+        <div class="d-flex justify-content-between align-items-center p-3 border-top">
+            <span class="text-muted small">
+                Página {{ page }} de {{ total_pages }} &mdash; {{ total_accounts }} cuentas
+            </span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item {{ 'disabled' if page <= 1 }}">
+                        <a class="page-link" href="{{ url_for('dashboard', page=page-1, search=search or '', sort=sort_by, order=sort_order) }}">&laquo;</a>
+                    </li>
+                    {% for p in range(1, total_pages + 1) %}
+                    {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                    <li class="page-item {{ 'active' if p == page }}">
+                        <a class="page-link" href="{{ url_for('dashboard', page=p, search=search or '', sort=sort_by, order=sort_order) }}">{{ p }}</a>
+                    </li>
+                    {% elif p == page - 3 or p == page + 3 %}
+                    <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                    {% endif %}
+                    {% endfor %}
+                    <li class="page-item {{ 'disabled' if page >= total_pages }}">
+                        <a class="page-link" href="{{ url_for('dashboard', page=page+1, search=search or '', sort=sort_by, order=sort_order) }}">&raquo;</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+            {% if search %}
+            No se encontraron cuentas para "<strong>{{ search }}</strong>".
+            {% else %}
+            No hay cuentas backupeadas todavía.
+            {% endif %}
+            {% if user.is_admin %}
+            <div class="mt-2">
+                <a href="{{ url_for('admin_panel') }}" class="btn btn-sm btn-primary">
+                    Ir al panel de admin
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function accSortBy(column) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('sort', column);
+    const currentSort = url.searchParams.get('sort');
+    const currentOrder = url.searchParams.get('order');
+    url.searchParams.set('order', (currentSort === column && currentOrder === 'DESC') ? 'ASC' : 'DESC');
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+}
+</script>
+{% endblock %}

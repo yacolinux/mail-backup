@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Zimbra Backup{% endblock %} - {{ t('app_title') }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --navbar-height: 56px;
+            --primary: #0d6efd;
+            --dark-bg: #212529;
+            --body-bg: #f5f7fb;
+            --card-bg: #fff;
+            --card-border: #e9ecef;
+            --card-header-bg: #f8f9fa;
+            --text-color: #212529;
+            --text-muted: #6c757d;
+            --sidebar-bg: #fff;
+            --sidebar-border: #dee2e6;
+            --sidebar-link: #495057;
+            --sidebar-hover: #f0f4ff;
+            --sidebar-active-bg: #e8f0fe;
+            --table-hover: #f8f9ff;
+            --input-bg: #fff;
+            --input-border: #dee2e6;
+            --input-color: #212529;
+            --modal-bg: #fff;
+            --dropdown-bg: #fff;
+            --dropdown-border: rgba(0,0,0,0.15);
+            --list-group-bg: #fff;
+            --light-bg-subtle: #f8f9fa;
+        }
+        body { background-color: var(--body-bg); color: var(--text-color); font-size: 0.9rem; }
+        .navbar { height: var(--navbar-height); background: var(--dark-bg) !important; }
+        .navbar-brand { font-weight: 700; letter-spacing: 0.03em; }
+        .sidebar {
+            position: fixed;
+            top: var(--navbar-height);
+            left: 0;
+            bottom: 0;
+            width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--sidebar-border);
+            overflow-y: auto;
+            padding-top: 1rem;
+            z-index: 100;
+        }
+        .sidebar .nav-link { color: var(--sidebar-link); }
+        .sidebar .nav-link:hover { background: var(--sidebar-hover); color: var(--primary); }
+        .sidebar .nav-link.active { background: var(--sidebar-active-bg); color: var(--primary); font-weight: 600; border-right: 3px solid var(--primary); }
+        .sidebar-label { color: var(--text-muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 0.75rem 1.25rem 0.25rem; letter-spacing: 0.08em; }
+        .sidebar-account-name {
+            display: inline-block;
+            max-width: calc(var(--sidebar-width) - 72px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+        }
+        .main-content { margin-left: var(--sidebar-width); padding: 1.5rem; min-height: calc(100vh - var(--navbar-height)); }
+        .stat-card { background: var(--card-bg); border-radius: 10px; padding: 1.25rem 1.5rem; border: 1px solid var(--card-border); display: flex; align-items: center; gap: 1rem; }
+        .stat-value { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+        .stat-label { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem; }
+        .email-row:hover { background: var(--table-hover) !important; cursor: pointer; }
+        .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; }
+        .card-header { background: var(--card-header-bg); border-bottom: 1px solid var(--card-border); font-weight: 600; color: var(--text-color); }
+        .table { color: var(--text-color); }
+        .table th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; border-top: none; }
+        .table td { border-color: var(--card-border); }
+        .table-hover tbody tr:hover { background: var(--table-hover) !important; }
+        .sort-header { cursor: pointer; user-select: none; white-space: nowrap; }
+        .sort-header:hover { color: var(--primary); }
+        .sort-indicator { font-size: 0.7rem; margin-left: 2px; opacity: 0.4; }
+        .sort-indicator.active { opacity: 1; }
+        .list-group-item { background: var(--card-bg); color: var(--text-color); border-color: var(--card-border); }
+        .list-group-item-action:hover { background: var(--sidebar-hover); }
+        .form-control, .form-select { background-color: var(--input-bg); border-color: var(--input-border); color: var(--input-color); }
+        .form-control:focus, .form-select:focus { background-color: var(--input-bg); color: var(--input-color); }
+        .modal-content { background-color: var(--modal-bg); }
+        .dropdown-menu { background-color: var(--dropdown-bg); border-color: var(--dropdown-border); }
+        .dropdown-item { color: var(--text-color); }
+        .dropdown-item:hover { background: var(--sidebar-hover); }
+        .pagination .page-link { background-color: var(--card-bg); border-color: var(--card-border); color: var(--primary); }
+        .pagination .active .page-link { background-color: var(--primary); border-color: var(--primary); color: #fff; }
+        .pagination .disabled .page-link { background-color: var(--card-bg); color: var(--text-muted); }
+        .text-muted { color: var(--text-muted) !important; }
+        .loading-box { background: var(--card-bg); }
+        #loading-overlay { background: rgba(0,0,0,0.5); }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-content { margin-left: 0; } }
+
+        /* Dark theme */
+        [data-theme="dark"] {
+            --body-bg: #1a1d23;
+            --card-bg: #252830;
+            --card-border: #333840;
+            --card-header-bg: #2a2d35;
+            --text-color: #d4d6db;
+            --text-muted: #8b8f97;
+            --sidebar-bg: #1e2127;
+            --sidebar-border: #333840;
+            --sidebar-link: #a0a4ac;
+            --sidebar-hover: #2a2d35;
+            --sidebar-active-bg: #1a3a5c;
+            --primary: #5b9cf5;
+            --table-hover: #2a2d35;
+            --input-bg: #2a2d35;
+            --input-border: #444850;
+            --input-color: #d4d6db;
+            --modal-bg: #252830;
+            --dropdown-bg: #252830;
+            --dropdown-border: #444850;
+            --list-group-bg: #252830;
+            --light-bg-subtle: #2a2d35;
+        }
+        [data-theme="dark"] .bg-light { background-color: #2a2d35 !important; }
+        [data-theme="dark"] .bg-white { background-color: var(--card-bg) !important; }
+        [data-theme="dark"] .border { border-color: var(--card-border) !important; }
+        [data-theme="dark"] .badge.bg-light { background-color: #3a3d45 !important; color: #d4d6db !important; }
+        [data-theme="dark"] .btn-outline-secondary { color: #a0a4ac; border-color: #555860; }
+        [data-theme="dark"] .btn-outline-secondary:hover { background: #3a3d45; color: #d4d6db; }
+        [data-theme="dark"] .btn-outline-primary { color: var(--primary); border-color: var(--primary); }
+        [data-theme="dark"] .nav-tabs .nav-link { color: #a0a4ac; }
+        [data-theme="dark"] .nav-tabs .nav-link.active { background: var(--card-bg); color: var(--primary); border-color: var(--card-border); }
+        [data-theme="dark"] .fw-semibold { color: var(--text-color); }
+        [data-theme="dark"] .badge.bg-light { background-color: #3a3d45 !important; color: #d4d6db !important; }
+        [data-theme="dark"] .badge.bg-secondary { background-color: #555860 !important; }
+        [data-theme="dark"] .alert-danger { background-color: #3d1f1f; color: #f5c2c7; border-color: #662a2a; }
+        [data-theme="dark"] .alert-success { background-color: #1a3d2a; color: #a3d9b1; border-color: #2d6641; }
+        [data-theme="dark"] .alert-warning { background-color: #3d3520; color: #ffe69c; border-color: #66562a; }
+        [data-theme="dark"] .alert-info { background-color: #1a2d3d; color: #9cc8f5; border-color: #2a4d66; }
+        [data-theme="dark"] hr { border-color: var(--card-border); }
+        [data-theme="dark"] .border-top { border-color: var(--card-border) !important; }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark navbar-expand-lg fixed-top px-3">
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-light border-0 me-1" id="sidebar-toggle-btn"
+                    onclick="toggleSidebar()" title="Mostrar/ocultar barra lateral">
+                <i class="bi bi-list" id="sidebar-toggle-icon"></i>
+            </button>
+            <i class="bi bi-shield-lock-fill text-primary fs-5"></i>
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">{{ t('app_title') }}</a>
+        </div>
+        <div class="ms-auto d-flex align-items-center gap-3">
+            {% if user %}
+            <button type="button" class="btn btn-sm btn-outline-light border-0" id="theme-toggle"
+                    onclick="toggleTheme()" title="{{ t('theme_toggle') }}">
+                <i class="bi bi-moon-stars-fill" id="theme-icon"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-light border-0" id="lang-toggle"
+                    onclick="toggleLanguage()" title="{{ t('lang_toggle') }}">
+                <span style="font-size:0.8rem;font-weight:700;">{{ lang.upper() }}</span>
+            </button>
+            <span class="text-light small d-none d-md-inline">
+                <i class="bi bi-person-circle me-1"></i>{{ user.display_name }}
+                {% if user.is_admin %}<span class="badge bg-warning text-dark ms-1">{{ t('admin_badge') }}</span>{% endif %}
+            </span>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">
+                <i class="bi bi-box-arrow-right"></i> {{ t('logout') }}
+            </a>
+            {% endif %}
+        </div>
+    </nav>
+
+    {% if user %}
+    <!-- Sidebar -->
+    <div class="sidebar pt-2" id="main-sidebar" style="top: 56px;">
+        <div class="sidebar-label">{{ t('sidebar_principal') }}</div>
+        <nav class="nav flex-column">
+            <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
+               href="{{ url_for('dashboard') }}">
+                <i class="bi bi-speedometer2"></i> {{ t('nav_dashboard') }}
+            </a>
+            {% if user.is_admin %}
+            <a class="nav-link {% if request.endpoint == 'admin_panel' %}active{% endif %}"
+               href="{{ url_for('admin_panel') }}">
+                <i class="bi bi-gear-fill"></i> {{ t('nav_administration') }}
+            </a>
+            <a class="nav-link {% if request.endpoint == 'admin_logs' %}active{% endif %}"
+               href="{{ url_for('admin_logs') }}">
+                <i class="bi bi-journal-code"></i> {{ t('nav_logs') }}
+            </a>
+            {% endif %}
+            <a class="nav-link {% if request.endpoint == 'manual_view' %}active{% endif %}"
+               href="{{ url_for('manual_view') }}">
+                <i class="bi bi-book"></i> {{ t('nav_manual') }}
+            </a>
+        </nav>
+
+        <div class="mt-3 px-3 pb-3">
+            <div class="small text-muted">
+                <i class="bi bi-info-circle me-1"></i>
+                <span id="sidebar-time">{{ now }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
+    {% endif %}
+
+    <!-- Main content -->
+    <main class="main-content" style="margin-top: 56px;">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'danger' else ('success' if category == 'success' else ('warning' if category == 'warning' else 'info')) }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Dark mode
+        (function() {
+            const saved = localStorage.getItem('zimbra_theme');
+            if (saved === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.getElementById('theme-icon').className = 'bi bi-sun-fill';
+            }
+        })();
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            if (html.getAttribute('data-theme') === 'dark') {
+                html.removeAttribute('data-theme');
+                icon.className = 'bi bi-moon-stars-fill';
+                localStorage.setItem('zimbra_theme', 'light');
+            } else {
+                html.setAttribute('data-theme', 'dark');
+                icon.className = 'bi bi-sun-fill';
+                localStorage.setItem('zimbra_theme', 'dark');
+            }
+        }
+
+        // Sidebar collapse
+        (function() {
+            const sidebar = document.getElementById('main-sidebar');
+            const handle  = document.getElementById('sidebar-resize-handle');
+            const toggle  = document.getElementById('sidebar-toggle-btn');
+            if (!sidebar || !toggle) return;
+
+            let savedWidth = parseInt(localStorage.getItem('zimbra_sidebar_width')) || 260;
+            const SIDEBAR_STORAGE = 'zimbra_sidebar_collapsed';
+
+            function collapse() {
+                savedWidth = sidebar.offsetWidth || savedWidth;
+                document.documentElement.style.setProperty('--sidebar-width', '0px');
+                sidebar.style.display = 'none';
+                if (handle) handle.style.display = 'none';
+                toggle.innerHTML = '<i class="bi bi-list"></i>';
+                toggle.setAttribute('title', 'Mostrar barra lateral');
+                localStorage.setItem(SIDEBAR_STORAGE, '1');
+            }
+
+            function uncollapse() {
+                const w = Math.max(160, savedWidth);
+                document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+                sidebar.style.display = '';
+                if (handle) { handle.style.display = ''; handle.style.left = w + 'px'; }
+                toggle.innerHTML = '<i class="bi bi-layout-sidebar-inset-reverse"></i>';
+                toggle.setAttribute('title', 'Ocultar barra lateral');
+                localStorage.setItem(SIDEBAR_STORAGE, '0');
+            }
+
+            window.toggleSidebar = function() {
+                if (localStorage.getItem(SIDEBAR_STORAGE) === '1') {
+                    uncollapse();
+                } else {
+                    collapse();
+                }
+            };
+
+            if (localStorage.getItem(SIDEBAR_STORAGE) === '1') {
+                collapse();
+            }
+        })();
+    </script>
+    <script>
+        // Language toggle
+        (function() {
+            const saved = localStorage.getItem('zimbra_lang');
+            if (saved && (saved === 'en' || saved === 'es') && !document.cookie.includes('zimbra_lang=' + saved)) {
+                document.cookie = 'zimbra_lang=' + saved + ';path=/;max-age=31536000;samesite=lax';
+                if (saved !== '{{ lang }}') { location.reload(); }
+            }
+        })();
+        function toggleLanguage() {
+            const current = '{{ lang }}';
+            const next = current === 'en' ? 'es' : 'en';
+            localStorage.setItem('zimbra_lang', next);
+            document.cookie = 'zimbra_lang=' + next + ';path=/;max-age=31536000;samesite=lax';
+            location.reload();
+        }
+    </script>
+    <script>
+        // Reloj en sidebar
+        function updateTime() {
+            const el = document.getElementById('sidebar-time');
+            if (el) {
+                el.textContent = new Date().toLocaleString('es-AR', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            }
+        }
+        updateTime();
+        setInterval(updateTime, 60000);
+    </script>
+    <script>
+        // ================================================================
+        // Sidebar resize (global sidebar)
+        // ================================================================
+        (function() {
+            const sidebar = document.getElementById('main-sidebar');
+            const handle  = document.getElementById('sidebar-resize-handle');
+            const main    = document.querySelector('.main-content');
+            if (!sidebar || !handle || !main) return;
+
+            const STORAGE_KEY = 'zimbra_sidebar_width';
+            const MIN_WIDTH   = 160;
+            const MAX_WIDTH   = 600;
+
+            // Restore saved width
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const w = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, parseInt(saved) || 260));
+                document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+            }
+
+            let dragging = false;
+            let startX   = 0;
+            let startW   = 0;
+
+            function syncHandlePosition() {
+                const w = sidebar.offsetWidth;
+                handle.style.left = w + 'px';
+            }
+            syncHandlePosition();
+
+            handle.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                dragging = true;
+                startX   = e.clientX;
+                startW   = sidebar.offsetWidth;
+                handle.classList.add('resizing');
+                document.body.style.userSelect = 'none';
+                document.body.style.cursor = 'col-resize';
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!dragging) return;
+                const dx = e.clientX - startX;
+                let newW = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startW + dx));
+                document.documentElement.style.setProperty('--sidebar-width', newW + 'px');
+                syncHandlePosition();
+            });
+
+            document.addEventListener('mouseup', function() {
+                if (!dragging) return;
+                dragging = false;
+                handle.classList.remove('resizing');
+                document.body.style.userSelect = '';
+                document.body.style.cursor = '';
+                localStorage.setItem(STORAGE_KEY, sidebar.offsetWidth);
+            });
+
+            // Update handle position on window resize
+            window.addEventListener('resize', syncHandlePosition);
+        })();
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

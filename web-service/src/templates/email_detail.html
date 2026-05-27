@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}{{ email.subject or '(sin asunto)' }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="d-flex align-items-center gap-2 mb-3">
+    <a href="{{ url_for('dashboard') }}" class="text-muted text-decoration-none">
+        <i class="bi bi-house"></i>
+    </a>
+    <i class="bi bi-chevron-right text-muted small"></i>
+    <a href="{{ url_for('email_list', email=email.account_email|default('')) }}"
+       class="text-muted text-decoration-none small">Emails</a>
+    <i class="bi bi-chevron-right text-muted small"></i>
+    <span class="small text-truncate" style="max-width:300px">
+        {{ email.subject or '(sin asunto)' }}
+    </span>
+</div>
+
+{% if email.deleted %}
+<div class="alert alert-danger d-flex gap-2 align-items-center">
+    <i class="bi bi-trash-fill fs-5"></i>
+    <div>
+        <strong>Email eliminado definitivamente</strong>
+        el {{ email.deleted_at | format_date }}.
+        Este email ya no está disponible en ningún snapshot.
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-lg-9">
+        <!-- Headers del email -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="fw-bold mb-3">{{ email.subject or '(sin asunto)' }}</h5>
+                <div class="row g-2 small">
+                    <div class="col-md-2 text-muted fw-semibold">De:</div>
+                    <div class="col-md-10">{{ email.from_addr or '-' }}</div>
+                    <div class="col-md-2 text-muted fw-semibold">Para:</div>
+                    <div class="col-md-10">{{ email.to_addr or '-' }}</div>
+                    <div class="col-md-2 text-muted fw-semibold">Fecha:</div>
+                    <div class="col-md-10">{{ email.date | format_date }}</div>
+                    <div class="col-md-2 text-muted fw-semibold">Carpeta:</div>
+                    <div class="col-md-10">
+                        <span class="badge bg-light text-dark border">{{ email.folder or 'INBOX' }}</span>
+                    </div>
+                    {% if email.message_id %}
+                    <div class="col-md-2 text-muted fw-semibold">Message-ID:</div>
+                    <div class="col-md-10 text-muted font-monospace small">{{ email.message_id }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Cuerpo del email -->
+        {% if content %}
+        <div class="card mb-3">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+                <span><i class="bi bi-file-text me-1"></i> Contenido</span>
+                <div class="btn-group btn-group-sm" id="view-toggle">
+                    {% if content.text_html %}
+                    <button class="btn btn-outline-secondary active" onclick="showHtml()">HTML</button>
+                    {% endif %}
+                    {% if content.text_plain %}
+                    <button class="btn btn-outline-secondary {% if not content.text_html %}active{% endif %}"
+                            onclick="showText()">Texto</button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if content.text_html %}
+                <div id="view-html" style="max-height:600px; overflow-y:auto;">
+                    <iframe id="email-frame" srcdoc="{{ content.text_html | e }}"
+                            style="width:100%; min-height:400px; border:none;"
+                            sandbox="allow-same-origin"
+                            onload="this.style.height = this.contentDocument.body.scrollHeight + 'px'">
+                    </iframe>
+                </div>
+                {% endif %}
+                {% if content.text_plain %}
+                <div id="view-text" {% if content.text_html %}style="display:none"{% endif %}
+                     class="p-3">
+                    <pre class="mb-0 small" style="white-space:pre-wrap; font-family: inherit;">{{ content.text_plain }}</pre>
+                </div>
+                {% endif %}
+                {% if not content.text_html and not content.text_plain %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-file-earmark d-block fs-2 mb-2"></i>
+                    Sin contenido de texto disponible
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Adjuntos -->
+        {% if content.attachments %}
+        <div class="card mb-3">
+            <div class="card-header py-2">
+                <i class="bi bi-paperclip me-1"></i> Adjuntos ({{ content.attachments | length }})
+            </div>
+            <div class="list-group list-group-flush">
+                {% for att in content.attachments %}
+                <div class="list-group-item d-flex align-items-center gap-3 py-2">
+                    <i class="bi bi-file-earmark-fill text-muted fs-4"></i>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold small">{{ att.filename or 'adjunto' }}</div>
+                        <div class="text-muted" style="font-size:0.75rem;">
+                            {{ att.content_type }} &mdash; {{ att.size | format_size }}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="card mb-3">
+            <div class="card-body text-center py-4 text-muted">
+                <i class="bi bi-exclamation-circle d-block fs-2 mb-2"></i>
+                No se pudo cargar el contenido de este email
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Panel lateral: acciones y metadata -->
+    <div class="col-lg-3">
+        <!-- Acciones -->
+        <div class="card mb-3">
+            <div class="card-header py-2">
+                <i class="bi bi-gear me-1"></i> Acciones
+            </div>
+            <div class="card-body">
+                <div class="mb-2 small text-muted fw-semibold">Descargar como:</div>
+                <div class="d-flex gap-1 flex-wrap">
+                    <a href="{{ url_for('email_download', email_id=email.id, fmt='md') }}"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-file-text me-1"></i> MD
+                    </a>
+                    <a href="{{ url_for('email_download', email_id=email.id, fmt='pdf') }}"
+                       class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-file-pdf me-1"></i> PDF
+                    </a>
+                    <a href="{{ url_for('email_download', email_id=email.id, fmt='docx') }}"
+                       class="btn btn-outline-info btn-sm">
+                        <i class="bi bi-file-word me-1"></i> DOCX
+                    </a>
+                </div>
+                {% if not email.deleted and user.is_admin %}
+                <hr class="my-2">
+                <button type="button" class="btn btn-outline-danger btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#deleteModal">
+                    <i class="bi bi-trash me-1"></i> Eliminar definitivamente
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Metadata técnica -->
+        <div class="card mb-3">
+            <div class="card-header py-2">
+                <i class="bi bi-info-circle me-1"></i> Metadatos
+            </div>
+            <div class="card-body small">
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">ID backup</span>
+                    <span class="fw-semibold">#{{ email.id }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Tamaño</span>
+                    <span>{{ email.size_bytes | format_size }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Carpeta</span>
+                    <span>{{ email.folder or 'INBOX' }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Flags</span>
+                    <span class="font-monospace">{{ email.maildir_flags or '-' }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Indexado</span>
+                    <span>{{ email.created_at | format_date }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal confirmación eliminación -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Eliminar email definitivamente
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <strong>⚠️ Esta operación es IRREVERSIBLE</strong>
+                </div>
+                <p>Se eliminará este email de <strong>todos los snapshots</strong> del backup:</p>
+                <ul class="small">
+                    <li><strong>Asunto:</strong> {{ email.subject or '(sin asunto)' }}</li>
+                    <li><strong>De:</strong> {{ email.from_addr or '-' }}</li>
+                    <li><strong>Fecha:</strong> {{ email.date | format_date }}</li>
+                </ul>
+                <p class="text-muted small">
+                    Una vez eliminado, no podrá recuperarse ni por soporte técnico.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form method="POST" action="{{ url_for('email_delete', email_id=email.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="confirm" value="yes">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i> Sí, eliminar definitivamente
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showHtml() {
+    document.getElementById('view-html').style.display = 'block';
+    document.getElementById('view-text').style.display = 'none';
+}
+function showText() {
+    const h = document.getElementById('view-html');
+    const t = document.getElementById('view-text');
+    if (h) h.style.display = 'none';
+    if (t) t.style.display = 'block';
+}
+</script>
+{% endblock %}

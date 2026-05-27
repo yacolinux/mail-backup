@@ -1,0 +1,25 @@
+#!/bin/bash
+# =============================================================================
+# zbackup-host - Wrapper para ejecutar la CLI desde el host Docker
+# =============================================================================
+# Instalar en el host:
+#   sudo cp scripts/zbackup-host /usr/local/bin/zbackup
+#   sudo chmod +x /usr/local/bin/zbackup
+#
+# Uso desde el host:
+#   zbackup status
+#   zbackup list-accounts
+#   zbackup list-emails usuario@dominio.com
+#   zbackup backup
+#   zbackup delete-email 123 --confirm
+
+CONTAINER="${ZIMBRA_BACKUP_CONTAINER:-zimbra-backup-service}"
+
+# Verificar que el contenedor esté corriendo
+if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    echo "ERROR: El contenedor '${CONTAINER}' no está corriendo."
+    echo "Iniciar con: docker compose up -d"
+    exit 1
+fi
+
+exec docker exec -it "${CONTAINER}" zbackup "$@"

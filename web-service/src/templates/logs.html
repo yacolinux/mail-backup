@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Logs del Sistema{% endblock %}
+
+{% block head %}
+<style>
+    .log-viewer {
+        background: #1a1d23;
+        color: #c0c5ce;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 0.82rem;
+        line-height: 1.4;
+        max-height: 70vh;
+        overflow-y: auto;
+        padding: 1rem;
+        border-radius: 0 0 6px 6px;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+    .log-viewer .DEBUG { color: #6c757d; }
+    .log-viewer .INFO  { color: #a3d9b1; }
+    .log-viewer .WARNING { color: #ffe69c; }
+    .log-viewer .ERROR { color: #f5c2c7; font-weight: bold; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+    <i class="bi bi-journal-code fs-4 text-info"></i>
+    <div>
+        <h5 class="mb-0 fw-bold">Logs del Sistema</h5>
+        <p class="text-muted small mb-0">Archivo de log del backup-service</p>
+    </div>
+    <div class="ms-auto d-flex gap-2 align-items-center">
+        <form method="GET" class="d-flex gap-1 align-items-center">
+            <select name="lines" class="form-select form-select-sm" style="width:100px" onchange="this.form.submit()">
+                <option value="100" {{ 'selected' if requested_lines == 100 }}>100</option>
+                <option value="200" {{ 'selected' if requested_lines == 200 }}>200</option>
+                <option value="500" {{ 'selected' if requested_lines == 500 }}>500</option>
+                <option value="1000" {{ 'selected' if requested_lines == 1000 }}>1000</option>
+                <option value="2000" {{ 'selected' if requested_lines == 2000 }}>2000</option>
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Ver</button>
+        </form>
+
+        <form method="POST" action="{{ url_for('admin_logs_level') }}" class="d-flex gap-1 align-items-center ms-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="level" class="form-select form-select-sm" style="width:100px">
+                {% for lvl in ['DEBUG', 'INFO', 'WARNING', 'ERROR'] %}
+                <option value="{{ lvl }}" {{ 'selected' if log_level == lvl }}>{{ lvl }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-warning">
+                <i class="bi bi-check-lg"></i> Cambiar
+            </button>
+        </form>
+
+        <a href="{{ url_for('admin_logs') }}?lines={{ requested_lines }}" class="btn btn-sm btn-outline-secondary" title="Refrescar">
+            <i class="bi bi-arrow-clockwise"></i>
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center py-1">
+        <span>
+            <i class="bi bi-file-text me-1"></i>
+            Últimas {{ log_lines }} líneas (total: {{ "{:,}".format(log_size) }} bytes)
+        </span>
+        <span class="small text-muted">
+            Nivel actual: <strong>{{ log_level }}</strong>
+        </span>
+    </div>
+    <div class="log-viewer" id="log-content">
+        {%- for line in log_content.split('\n') -%}
+        {%- set lvl = line[20:30] | trim if line|length > 30 else '' -%}
+        <span class="{{ lvl if lvl in ('DEBUG','INFO','WARNING','ERROR') }}">{{ line }}</span>
+{% endfor %}{{ log_content and '\n' or '' }}{%- if not log_content -%}
+<span class="text-muted">Sin contenido de log</span>
+{%- endif -%}
+    </div>
+</div>
+{% endblock %}
