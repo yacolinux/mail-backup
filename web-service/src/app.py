@@ -85,6 +85,8 @@ def generate_csrf_token():
 def check_csrf():
     if request.method == "POST" and request.endpoint and request.endpoint != "login":
         token = request.form.get("csrf_token", "")
+        if not token and request.is_json:
+            token = request.get_json(silent=True).get("csrf_token", "") if request.get_json(silent=True) else ""
         if token != session.get("csrf_token", ""):
             abort(403)
 

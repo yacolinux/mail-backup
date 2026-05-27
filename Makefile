@@ -115,7 +115,12 @@ dev-maildir: ## Crear estructura de prueba con maildir falso
 	@echo "$(GREEN)✓ Estructura maildir de prueba creada$(NC)"
 
 # --- Desarrollo (maildir local, DEMO_AUTH) ---
-dev-up: ## Iniciar entorno de desarrollo (maildir local + demo auth)
+.env.dev:
+	@echo "$(YELLOW)➜  Creando .env.dev para desarrollo...$(NC)"
+	@printf '# %s\n# %s\n# %s\n\nBACKUP_CONFIG=/config/backup.conf\nTZ=America/Argentina/Buenos_Aires\nBACKUP_API_KEY=dev_api_key_1234567890abcdef\nZIMBRA_REMOTE_HOST=localhost\nZIMBRA_REMOTE_USER=devuser\nRSYNC_HOST=localhost\nRSYNC_USER=devuser\nWEB_PORT=8080\nWEB_SECRET_KEY=dev_secret_key_1234567890abcdef\nLDAP_HOST=ldap://localhost\nLDAP_PORT=389\nLDAP_USE_TLS=false\nLDAP_BIND_DN=uid=admin,ou=people,dc=example,dc=com\nLDAP_BIND_PASSWORD=admin123\nLDAP_BASE_DN=ou=people,dc=example,dc=com\nLDAP_USER_FILTER=(mail={username})\nLDAP_GROUP_ADMIN=cn=admins,ou=groups,dc=example,dc=com\nDEMO_AUTH=true\n' > .env.dev
+	@echo "$(GREEN)✓ .env.dev creado$(NC)"
+
+dev-up: .env.dev ## Iniciar entorno de desarrollo (maildir local + demo auth)
 	@echo "$(YELLOW)➜  Iniciando entorno de DESARROLLO (NO USAR EN PRODUCCIÓN)$(NC)"
 	@mkdir -p data/backups data/db data/logs data/git data/weblogs dev-maildir
 	@chmod -R 777 data/ dev-maildir/ 2>/dev/null || true

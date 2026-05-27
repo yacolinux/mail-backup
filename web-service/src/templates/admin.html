@@ -250,6 +250,7 @@
                     </ul>
                     <div class="tab-content" id="config-tabs"></div>
                 </div>
+                <input type="hidden" id="csrf-token" value="{{ csrf_token() }}">
             </div>
             <div class="modal-footer">
                 <div class="d-flex align-items-center gap-2 me-auto">
@@ -627,9 +628,11 @@ async function saveConfig() {
     const status = document.getElementById('config-status');
     status.className = 'text-info small';
     status.textContent = _t('saving');
+    const csrf = document.getElementById('csrf-token').value;
     try {
         // Save backup config sections
         const cfgData = collectConfig();
+        cfgData.csrf_token = csrf;
         const respCfg = await fetch('{{ url_for("admin_config_save") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -640,6 +643,7 @@ async function saveConfig() {
 
         // Save auth sections
         const authData = collectAuthConfig();
+        authData.csrf_token = csrf;
         const respAuth = await fetch('{{ url_for("admin_config_auth_save") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},

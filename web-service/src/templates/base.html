@@ -329,11 +329,14 @@
             const MIN_WIDTH   = 160;
             const MAX_WIDTH   = 600;
 
-            // Restore saved width
-            const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                const w = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, parseInt(saved) || 260));
-                document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+            // Restore saved width (only if sidebar is not collapsed)
+            const isCollapsed = localStorage.getItem('zimbra_sidebar_collapsed') === '1';
+            if (!isCollapsed) {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const w = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, parseInt(saved) || 260));
+                    document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+                }
             }
 
             let dragging = false;
